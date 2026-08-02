@@ -114,16 +114,34 @@ for (const fixture of fixtures) {
   rows.push(row);
 }
 
-// ---- scorecard -------------------------------------------------------------
+// ---- scorecard, with deltas against the committed baseline -----------------
+
+let baseline = null;
+try {
+  baseline = JSON.parse(readFileSync(join(HERE, "baseline.json"), "utf8"));
+} catch {}
+
+function deltaTag(dim, pass, total) {
+  const base = baseline?.scores?.[dim];
+  if (!base) return "";
+  if (total !== base.total) return ""; // partial run (--only): not comparable
+  const before = `${base.pass}/${base.total}`;
+  if (pass > base.pass) return `  (baseline ${before})  ▲ improved`;
+  if (pass < base.pass) return `  (baseline ${before})  ▼ REGRESSION`;
+  return `  (baseline ${before})  = unchanged`;
+}
 
 const judged = rows.filter((r) => r.verdict);
+const scores = {};
 console.log(`\n${"─".repeat(56)}\nSCORECARD (${judged.length}/${rows.length} fixtures judged)`);
 for (const dim of DIMENSIONS) {
   const passes = judged.filter((r) => r.verdict[dim]?.pass).length;
-  console.log(`  ${dim.padEnd(14)} ${passes}/${judged.length}`);
+  scores[dim] = { pass: passes, total: judged.length };
+  console.log(`  ${dim.padEnd(14)} ${passes}/${judged.length}${deltaTag(dim, passes, judged.length)}`);
 }
 const lintClean = rows.filter((r) => r.lint?.ok).length;
-console.log(`  ${"lint-clean".padEnd(14)} ${lintClean}/${rows.length}`);
+scores["lint-clean"] = { pass: lintClean, total: rows.length };
+console.log(`  ${"lint-clean".padEnd(14)} ${lintClean}/${rows.length}${deltaTag("lint-clean", lintClean, rows.length)}`);
 
 const failures = judged.flatMap((r) =>
   DIMENSIONS.filter((d) => !r.verdict[d]?.pass).map((d) => `  ${r.name} → ${d}: ${r.verdict[d]?.evidence}`),
@@ -146,3 +164,14 @@ mkdirSync(resultsDir, { recursive: true });
 const outPath = join(resultsDir, `run-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
 writeFileSync(outPath, JSON.stringify({ ranAt: new Date().toISOString(), rows }, null, 2));
 console.log(`\nFull details (every explanation + verdict): ${outPath}`);
+
+// --update-baseline: bless THIS run's scores as the new reference point.
+// Only do this deliberately, after reviewing the deltas — and commit the
+// baseline change together with the prompt change that earned it.
+if (args.includes("--update-baseline") && !only) {
+  writeFileSync(
+    join(HERE, "baseline.json"),
+    JSON.stringify({ savedAt: new Date().toISOString(), note: "Updated via --update-baseline", fixtures: rows.length, scores }, null, 2),
+  );
+  console.log("Baseline updated — remember to commit evals/baseline.json.");
+}

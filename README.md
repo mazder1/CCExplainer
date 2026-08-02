@@ -98,6 +98,10 @@ npm test        # or: node --test
 
 Zero test dependencies — the suite runs on Node's built-in test runner, needs no API keys, and never touches the network (providers are faked). CI runs it on Linux and Windows on every push.
 
+## Output-quality evals
+
+Tests prove the plumbing; [`evals/`](evals/) judges the words. Eleven hand-written trap fixtures each tempt one forbidden failure (re-explaining a solved problem, revealing the listener notes, speaking a raw file path…). `npm run eval` generates a real explanation per fixture through the production prompt path, lints it mechanically for free, then has a judge model rule on each trap with quoted evidence — and prints the scorecard as deltas against the committed [`baseline.json`](evals/baseline.json), so any prompt change is answered with "improved / unchanged / REGRESSION" instead of vibes. Costs a few cents per run (uses your configured LLM key); judge provider is overridable via `EVAL_JUDGE_*` env vars.
+
 ## Repo layout
 
 ```
