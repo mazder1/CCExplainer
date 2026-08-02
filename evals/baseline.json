@@ -1,13 +1,13 @@
 {
-  "savedAt": "2026-08-02T17:21:22Z",
-  "note": "After tuning rounds A-C: 20-word sentence cap, faithfulness clause, no-trace calibration, mastered-topics rule, lint retry loop, duck question count. Previous baseline: trap 7, faithfulness 8, scope 11, calibration 9, coherence 11, lint-clean 6.",
-  "fixtures": 11,
+  "savedAt": "2026-08-02T19:24:22Z",
+  "note": "After the role-confusion fix (narrator rule + lint guard + bait fixture); 12 fixtures now. Previous 11-fixture baseline: trap 8, faithfulness 9, scope 11, calibration 11, coherence 11, lint-clean 11.",
+  "fixtures": 12,
   "scores": {
-    "trap": { "pass": 8, "total": 11 },
-    "faithfulness": { "pass": 9, "total": 11 },
-    "scope": { "pass": 11, "total": 11 },
-    "calibration": { "pass": 11, "total": 11 },
-    "coherence": { "pass": 11, "total": 11 },
-    "lint-clean": { "pass": 11, "total": 11 }
+    "trap": { "pass": 10, "total": 12 },
+    "faithfulness": { "pass": 11, "total": 12 },
+    "scope": { "pass": 12, "total": 12 },
+    "calibration": { "pass": 12, "total": 12 },
+    "coherence": { "pass": 12, "total": 12 },
+    "lint-clean": { "pass": 12, "total": 12 }
   }
 }
