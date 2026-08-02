@@ -7,6 +7,7 @@
 //   node scripts/explain.mjs                            -> educator, latest session
 //   node scripts/explain.mjs --persona senior-engineer
 //   node scripts/explain.mjs --no-notes                 -> skip the analyzer (faster, generic)
+//   node scripts/explain.mjs --offset -2                -> explain the message two BEFORE the last
 
 import {
   projectTranscriptDir,
@@ -31,15 +32,21 @@ const personaName = flag("persona", "educator");
 const modelId = flag("model", llmConfig().model);
 const useNotes = !args.includes("--no-notes");
 const live = args.includes("--live");
+const offset = parseInt(flag("offset", "0"), 10) || 0;
 const transcriptArg = args.find((a) => a.endsWith(".jsonl"));
 
 // The material: the last assistant message — or, in --live mode, the last
 // one BEFORE the /speak invocation (see pickMessageToExplain for why).
 const transcriptPath = transcriptArg ?? latestTranscript(projectTranscriptDir(process.cwd()));
 const turns = readConversation(transcriptPath);
-const lastMessage = pickMessageToExplain(turns, { live });
+const lastMessage = pickMessageToExplain(turns, { live, offset });
 if (!lastMessage) {
-  console.error("No assistant message found in this session yet.");
+  const available = turns.filter((t) => t.role === "CLAUDE").length;
+  console.error(
+    offset
+      ? `No assistant message at offset ${offset} — this session has ${available} assistant message(s).`
+      : "No assistant message found in this session yet.",
+  );
   process.exit(1);
 }
 

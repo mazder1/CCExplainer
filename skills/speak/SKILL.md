@@ -1,19 +1,20 @@
 ---
 name: speak
 description: Speak an explanation of the latest Claude message aloud, in a chosen persona, via ElevenLabs
-argument-hint: "[educator|senior-engineer|rubber-duck]"
+argument-hint: "[educator|senior-engineer|rubber-duck] [offset, e.g. -2]"
 disable-model-invocation: true
 allowed-tools: Bash
 ---
 
 The user wants to HEAR an explanation of your latest message, spoken aloud.
 
-Run this command from the project root (a persona may have been passed in the
-arguments; if "$ARGUMENTS" is empty or not one of educator, senior-engineer,
-rubber-duck, use educator):
+Run this command from the project root. The arguments "$ARGUMENTS" may contain
+a persona (educator, senior-engineer, rubber-duck — default educator) and/or a
+number, e.g. "-2", meaning: explain the assistant message that many turns
+BEFORE the latest one (add --offset <n> only when a number was given):
 
 ```
-node "${CLAUDE_SKILL_DIR}/../../scripts/explain.mjs" --live --persona <persona> | node "${CLAUDE_SKILL_DIR}/../../scripts/speak.mjs" -
+node "${CLAUDE_SKILL_DIR}/../../scripts/explain.mjs" --live --persona <persona> [--offset <n>] | node "${CLAUDE_SKILL_DIR}/../../scripts/speak.mjs" -
 ```
 
 Rules:

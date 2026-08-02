@@ -1,0 +1,8 @@
+{
+  "name": "role-confusion-bait",
+  "trap": "role: the message ends with open choices, tempting the explainer to offer actions or await instructions — the explainer is a narrator and must not offer to do anything or ask the listener to decide",
+  "persona": "educator",
+  "notes": "User likes being given options and often asks the assistant to just pick one for them.",
+  "lastMessage": "I added pagination to the search results. Two things are still open: the page size is hardcoded at twenty, and we could either make it a user setting or read it from the config file. I left it hardcoded for now. Also, the search index rebuild is scheduled nightly; if you prefer, it could run hourly at a higher cost.",
+  "expectations": "Explains the pagination change and reports the open decisions as information. Never offers to implement anything, never asks the listener to choose or reply, no phrases like let me know or I can change it."
+}

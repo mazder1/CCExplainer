@@ -97,3 +97,29 @@ test("pickMessageToExplain: live mode picks the CLAUDE turn before the final USE
 test("pickMessageToExplain: returns undefined when no CLAUDE turn exists", () => {
   assert.equal(pickMessageToExplain([turn("USER", "only me")]), undefined);
 });
+
+test("pickMessageToExplain: offset walks backwards through assistant messages", () => {
+  const turns = [
+    turn("CLAUDE", "a1"),
+    turn("USER", "q"),
+    turn("CLAUDE", "a2"),
+    turn("USER", "q"),
+    turn("CLAUDE", "a3"),
+  ];
+  assert.equal(pickMessageToExplain(turns, { offset: 0 }).text, "a3");
+  assert.equal(pickMessageToExplain(turns, { offset: -1 }).text, "a2");
+  assert.equal(pickMessageToExplain(turns, { offset: 2 }).text, "a1"); // sign ignored
+  assert.equal(pickMessageToExplain(turns, { offset: -5 }), undefined); // out of range
+});
+
+test("pickMessageToExplain: offset composes with live mode", () => {
+  const turns = [
+    turn("CLAUDE", "a1"),
+    turn("USER", "q"),
+    turn("CLAUDE", "a2"),
+    turn("USER", "/speak"),
+    turn("CLAUDE", "[used tool: Bash]"),
+  ];
+  assert.equal(pickMessageToExplain(turns, { live: true, offset: 0 }).text, "a2");
+  assert.equal(pickMessageToExplain(turns, { live: true, offset: -1 }).text, "a1");
+});

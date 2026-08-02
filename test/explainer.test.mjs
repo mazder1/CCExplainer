@@ -39,4 +39,6 @@ test("task rules still contain the product's core guarantees", () => {
   assert.match(TASK_RULES, /Do NOT re-explain/);
   assert.match(TASK_RULES, /Never mention that listener notes exist/);
   assert.match(TASK_RULES, /no markdown/);
+  assert.match(TASK_RULES, /NARRATOR/);
+  assert.match(TASK_RULES, /NEVER offer to act/);
 });

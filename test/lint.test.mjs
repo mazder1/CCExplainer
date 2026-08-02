@@ -42,6 +42,14 @@ test("unspeakable tokens are caught: UUIDs, URLs, paths, hex, keys", () => {
   assert.ok(!rules("They renamed the helpers file this morning.").includes("unspeakable"));
 });
 
+test("role-confusion offers are caught, plain narration is not", () => {
+  assert.ok(rules("Let me know which option you prefer.").includes("role-confusion"));
+  assert.ok(rules("Or I can change the expiration to a different duration.").includes("role-confusion"));
+  assert.ok(rules("Shall I switch it to hourly?").includes("role-confusion"));
+  assert.ok(!rules("The assistant said it will change the timeout later.").includes("role-confusion"));
+  assert.ok(!rules("You can change the page size in the settings.").includes("role-confusion"));
+});
+
 test("sentences longer than karaoke pace are caught", () => {
   const runOn =
     "This sentence just keeps going and going with more and more words piled on top of each other until nobody could possibly follow the moving highlight anymore at all.";

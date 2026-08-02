@@ -75,14 +75,16 @@ export function conversationAsText(turns) {
 // (a USER turn) and possibly in-progress assistant activity after it — so
 // the message the user actually means is the last CLAUDE turn BEFORE that
 // final USER turn.
-export function pickMessageToExplain(turns, { live = false } = {}) {
-  let picked;
+// offset counts backwards from the picked message: 0 = the usual pick,
+// -2 (or 2 — sign is ignored) = two assistant messages before that one.
+export function pickMessageToExplain(turns, { live = false, offset = 0 } = {}) {
+  let scope = turns;
   if (live) {
     const lastUserIndex = turns.findLastIndex((t) => t.role === "USER");
-    picked = turns
-      .slice(0, Math.max(lastUserIndex, 0))
-      .reverse()
-      .find((t) => t.role === "CLAUDE");
+    if (lastUserIndex > 0) scope = turns.slice(0, lastUserIndex);
+    // If nothing precedes the /speak invocation, fall back to the full list.
+    if (!scope.some((t) => t.role === "CLAUDE")) scope = turns;
   }
-  return picked ?? [...turns].reverse().find((t) => t.role === "CLAUDE");
+  const claudeTurns = scope.filter((t) => t.role === "CLAUDE");
+  return claudeTurns[claudeTurns.length - 1 - Math.abs(offset)];
 }

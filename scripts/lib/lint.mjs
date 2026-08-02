@@ -47,6 +47,12 @@ export function lintExplanation(text, { persona = null } = {}) {
     if (lower.includes(phrase)) violations.push({ rule: "mentions-notes", detail: `"${phrase}"` });
   }
 
+  // --- role confusion: the narrator offering to act -----------------------
+  const ROLE_CONFUSION =
+    /\b(let me know|tell me if you want|shall i|want me to|i (?:can|could|will|'ll|’ll) (?:change|add|update|implement|fix|adjust|proceed|switch|set|make))\b/i;
+  const roleHit = trimmed.match(ROLE_CONFUSION);
+  if (roleHit) violations.push({ rule: "role-confusion", detail: `"${roleHit[0]}"` });
+
   // --- unspeakable tokens -------------------------------------------------
   if (/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(trimmed))
     violations.push({ rule: "unspeakable", detail: "UUID" });
