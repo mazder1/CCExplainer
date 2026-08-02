@@ -211,17 +211,20 @@ function startJob(nextJob) {
   writeFileSync(audioPath, Buffer.from(job.audioBase64, "base64"));
 
   if (process.platform === "win32") {
+    // Windows Media Player COM — NOT WPF MediaPlayer: that engine mutes the
+    // audio track whenever SpeedRatio differs from 1.0. WMP has real
+    // variable-speed playback (settings.rate), volume and seeking.
     const psScript = [
-      "Add-Type -AssemblyName PresentationCore",
-      "$p = New-Object System.Windows.Media.MediaPlayer",
-      `$p.Open([Uri](Resolve-Path '${audioPath}').Path)`,
-      `$p.SpeedRatio = ${Math.round(rate * 100)} / 100`,
-      `$p.Volume = ${Math.round(volume * 100)} / 100`,
-      "$p.Play()",
-      "while (-not $p.NaturalDuration.HasTimeSpan) { Start-Sleep -Milliseconds 50 }",
+      "$w = New-Object -ComObject WMPlayer.OCX",
+      "$w.settings.autoStart = $false",
+      `$w.URL = (Resolve-Path '${audioPath}').Path`,
+      `$w.settings.rate = ${Math.round(rate * 100)} / 100`,
+      `$w.settings.volume = ${Math.round(volume * 100)}`,
+      "$w.controls.play()",
+      "$tries = 0; while ($w.playState -ne 3 -and $tries -lt 100) { Start-Sleep -Milliseconds 50; $tries++ }",
       "[Console]::Out.WriteLine('START')",
-      "while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $parts = $line.Split(' '); if ($parts[0] -eq 'PAUSE') { $p.Pause() } elseif ($parts[0] -eq 'PLAY') { $p.Play() } elseif ($parts[0] -eq 'SEEK') { $p.Position = [TimeSpan]::FromMilliseconds([int]$parts[1]) } elseif ($parts[0] -eq 'RATE') { $p.SpeedRatio = [int]$parts[1] / 100 } elseif ($parts[0] -eq 'VOL') { $p.Volume = [int]$parts[1] / 100 } }",
-      "$p.Close()",
+      "while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $parts = $line.Split(' '); if ($parts[0] -eq 'PAUSE') { $w.controls.pause() } elseif ($parts[0] -eq 'PLAY') { $w.controls.play() } elseif ($parts[0] -eq 'SEEK') { $w.controls.currentPosition = [int]$parts[1] / 1000 } elseif ($parts[0] -eq 'RATE') { $w.settings.rate = [int]$parts[1] / 100 } elseif ($parts[0] -eq 'VOL') { $w.settings.volume = [int]$parts[1] } }",
+      "$w.controls.stop()",
     ].join("; ");
     player = execFile("powershell", ["-NoProfile", "-Command", psScript], { windowsHide: true });
     player.stdout.on("data", (d) => {
