@@ -10,9 +10,10 @@
 //
 // No dependencies — Node's built-in fetch() and fs are enough.
 
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, unlinkSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // ---------------------------------------------------------------------------
 // Step 1: load the secret.
@@ -95,14 +96,25 @@ if (!response.ok) {
 }
 
 // ---------------------------------------------------------------------------
-// Step 4: save the audio bytes to a file...
+// Step 4: stage the audio for playback.
+//
+// The audio engine has to read from a file, so the bytes briefly land in the
+// system TEMP folder — and are deleted automatically as soon as playback
+// finishes. Nothing persists. Pass --keep to save a copy to output/ instead
+// (useful for debugging or comparing voices).
 // ---------------------------------------------------------------------------
 
+const keep = args.includes("--keep");
 const audio = Buffer.from(await response.arrayBuffer());
-mkdirSync("output", { recursive: true });
-const outPath = join("output", "speech.mp3");
+let outPath;
+if (keep) {
+  mkdirSync("output", { recursive: true });
+  outPath = join("output", "speech.mp3");
+  console.log(`Keeping a copy at ${outPath}`);
+} else {
+  outPath = join(tmpdir(), `ccexplainer-${Date.now()}.mp3`);
+}
 writeFileSync(outPath, audio);
-console.log(`Saved ${(audio.length / 1024).toFixed(0)} KB to ${outPath}`);
 
 // ---------------------------------------------------------------------------
 // Step 5: ...and play it silently in the background — no window, no player app.
@@ -122,6 +134,8 @@ if (process.platform === "win32") {
     "while (-not $p.NaturalDuration.HasTimeSpan) { Start-Sleep -Milliseconds 100 }",
     "Start-Sleep -Milliseconds ($p.NaturalDuration.TimeSpan.TotalMilliseconds + 300)",
     "$p.Close()",
+    // Clean up the temp file once playback is over (unless --keep was used).
+    ...(keep ? [] : [`Remove-Item -Force '${outPath}'`]),
   ].join("; ");
   execFile(
     "powershell",
@@ -130,6 +144,7 @@ if (process.platform === "win32") {
   );
 } else {
   // macOS/Linux: afplay/mpg123 are terminal-only players — also windowless.
-  execFile(process.platform === "darwin" ? "afplay" : "mpg123", [outPath]);
+  const player = execFile(process.platform === "darwin" ? "afplay" : "mpg123", [outPath]);
+  if (!keep) player.on("exit", () => { try { unlinkSync(outPath); } catch {} });
 }
-console.log("Playing in the background (no window will open).");
+console.log("Playing in the background. No window, no saved file.");
