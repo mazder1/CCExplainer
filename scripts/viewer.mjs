@@ -57,8 +57,8 @@ let startedAt = 0; // wall-clock ms of the last play/resume/seek
 let clockOffset = 0; // seconds of speech already "on the clock" at startedAt
 let paused = false;
 let pollCountdown = 0;
-let rate = 1.0; // playback speed multiplier (0.5x .. 2x), survives across jobs
-let volume = 1.0; // 0..1, survives across jobs
+let voiceSpeed = 1.0; // synthesis speed for the NEXT narration (0.7 .. 1.2)
+let volume = 1.0; // 0..1, live, survives across jobs
 
 // Self-service narration: the viewer can run the whole pipeline itself —
 // no Claude Code turn involved, fully deterministic. Press [n].
@@ -112,6 +112,7 @@ async function narrate() {
     generating = "synthesizing voice…";
     const { audio, words, duration } = await synthesizeWithTimings(gen.text, {
       apiKey: process.env.ELEVENLABS_API_KEY,
+      speed: voiceSpeed,
     });
     generating = null;
     startJob({ text: gen.text, words, duration, audioBase64: audio.toString("base64") });
@@ -124,9 +125,7 @@ async function narrate() {
 }
 
 function elapsed() {
-  // Speech-position advances at `rate` × wall-clock — the karaoke highlight
-  // must follow the sped-up/slowed-down voice, not real time.
-  return paused ? clockOffset : clockOffset + ((Date.now() - startedAt) / 1000) * rate;
+  return paused ? clockOffset : clockOffset + (Date.now() - startedAt) / 1000;
 }
 
 function width() {
@@ -146,7 +145,7 @@ function renderIdle() {
     : `${DIM}Press [n] to narrate — or use /speak in Claude Code.${RESET}\n\n`;
   const target = targetLine();
   if (target) frame += `${target}\n\n`;
-  frame += `${"─".repeat(width())}\n[n] narrate  [←/→] older/newer msg  [1/2/3] persona: ${currentPersona}  [q] quit\n`;
+  frame += `${"─".repeat(width())}\n[n] narrate  [←/→] older/newer msg  [1/2/3] persona: ${currentPersona}  [[/]] voice speed ${voiceSpeed.toFixed(1)}x  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -175,8 +174,8 @@ function renderPlaying() {
   frame += `${"─".repeat(width())}\n\n`;
   frame += renderWords(t);
   frame += `\n\n${"─".repeat(width())}\n`;
-  frame += `${t.toFixed(1)}s / ${job.duration.toFixed(1)}s   ${rate.toFixed(2)}x   vol ${Math.round(volume * 100)}%\n`;
-  frame += `[k] ${paused ? "resume" : "pause"}  [j/l] -/+5s  [↑/↓] volume  [[/]] speed  [0] restart  [s] skip  [q] quit\n`;
+  frame += `${t.toFixed(1)}s / ${job.duration.toFixed(1)}s   vol ${Math.round(volume * 100)}%   next voice speed ${voiceSpeed.toFixed(1)}x\n`;
+  frame += `[k] ${paused ? "resume" : "pause"}  [j/l] -/+5s  [↑/↓] volume  [[/]] next speed  [0] restart  [s] skip  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -211,20 +210,20 @@ function startJob(nextJob) {
   writeFileSync(audioPath, Buffer.from(job.audioBase64, "base64"));
 
   if (process.platform === "win32") {
-    // Windows Media Player COM — NOT WPF MediaPlayer: that engine mutes the
-    // audio track whenever SpeedRatio differs from 1.0. WMP has real
-    // variable-speed playback (settings.rate), volume and seeking.
+    // WPF MediaPlayer: reliable playback, pause, seek and LIVE volume in a
+    // hidden process. Its one vice — muting audio when SpeedRatio changes —
+    // is why speed is applied at SYNTHESIS time instead (voiceSpeed), which
+    // also sounds natural. (WMP COM was tried and never starts headless.)
     const psScript = [
-      "$w = New-Object -ComObject WMPlayer.OCX",
-      "$w.settings.autoStart = $false",
-      `$w.URL = (Resolve-Path '${audioPath}').Path`,
-      `$w.settings.rate = ${Math.round(rate * 100)} / 100`,
-      `$w.settings.volume = ${Math.round(volume * 100)}`,
-      "$w.controls.play()",
-      "$tries = 0; while ($w.playState -ne 3 -and $tries -lt 100) { Start-Sleep -Milliseconds 50; $tries++ }",
+      "Add-Type -AssemblyName PresentationCore",
+      "$p = New-Object System.Windows.Media.MediaPlayer",
+      `$p.Open([Uri](Resolve-Path '${audioPath}').Path)`,
+      `$p.Volume = ${Math.round(volume * 100)} / 100`,
+      "$p.Play()",
+      "while (-not $p.NaturalDuration.HasTimeSpan) { Start-Sleep -Milliseconds 50 }",
       "[Console]::Out.WriteLine('START')",
-      "while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $parts = $line.Split(' '); if ($parts[0] -eq 'PAUSE') { $w.controls.pause() } elseif ($parts[0] -eq 'PLAY') { $w.controls.play() } elseif ($parts[0] -eq 'SEEK') { $w.controls.currentPosition = [int]$parts[1] / 1000 } elseif ($parts[0] -eq 'RATE') { $w.settings.rate = [int]$parts[1] / 100 } elseif ($parts[0] -eq 'VOL') { $w.settings.volume = [int]$parts[1] } }",
-      "$w.controls.stop()",
+      "while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $parts = $line.Split(' '); if ($parts[0] -eq 'PAUSE') { $p.Pause() } elseif ($parts[0] -eq 'PLAY') { $p.Play() } elseif ($parts[0] -eq 'SEEK') { $p.Position = [TimeSpan]::FromMilliseconds([int]$parts[1]) } elseif ($parts[0] -eq 'VOL') { $p.Volume = [int]$parts[1] / 100 } }",
+      "$p.Close()",
     ].join("; ");
     player = execFile("powershell", ["-NoProfile", "-Command", psScript], { windowsHide: true });
     player.stdout.on("data", (d) => {
@@ -277,11 +276,10 @@ function seekTo(seconds) {
   startedAt = Date.now();
 }
 
-function setRate(newRate) {
-  clockOffset = elapsed(); // freeze the clock at the old rate first
-  startedAt = Date.now();
-  rate = Math.min(2, Math.max(0.5, Math.round(newRate * 100) / 100));
-  commandPlayer(`RATE ${Math.round(rate * 100)}`);
+function setVoiceSpeed(v) {
+  // Applies to the NEXT synthesis — the voice genuinely speaks faster or
+  // slower there (no pitch shift), and word timings arrive already matching.
+  voiceSpeed = Math.min(1.2, Math.max(0.7, Math.round(v * 10) / 10));
 }
 
 function setVolume(v) {
@@ -325,8 +323,8 @@ process.stdin.on("data", (key) => {
     if (k === "l") seekTo(elapsed() + 5);
     if (k === "0") seekTo(0);
     if (k === "s") dismissJob();
-    if (k === "[") setRate(rate - 0.25);
-    if (k === "]") setRate(rate + 0.25);
+    if (k === "[") setVoiceSpeed(voiceSpeed - 0.1);
+    if (k === "]") setVoiceSpeed(voiceSpeed + 0.1);
     if (k === "\x1b[A") setVolume(volume + 0.1); // up arrow
     if (k === "\x1b[B") setVolume(volume - 0.1); // down arrow
   } else if (mode === "done") {
@@ -335,6 +333,8 @@ process.stdin.on("data", (key) => {
   }
   if (mode !== "playing") {
     if (k === "n") narrate();
+    if (k === "[") setVoiceSpeed(voiceSpeed - 0.1);
+    if (k === "]") setVoiceSpeed(voiceSpeed + 0.1);
     const personaKey = ["1", "2", "3"].indexOf(k);
     if (personaKey !== -1) currentPersona = PERSONAS[personaKey];
     if (k === "\x1b[D") {
