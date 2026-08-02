@@ -21,7 +21,7 @@ export function llmConfig() {
 // Optional overrides (model, baseUrl, apiKey) let a caller talk to a
 // DIFFERENT provider than the default — the eval judge uses this so it can
 // be a different model family than the writer it grades.
-export async function chat(messages, { model, baseUrl, apiKey } = {}) {
+export async function chat(messages, { model, baseUrl, apiKey, effort } = {}) {
   const defaults = llmConfig();
   const cfg = {
     baseUrl: (baseUrl ?? defaults.baseUrl).replace(/\/+$/, ""),
@@ -35,15 +35,16 @@ export async function chat(messages, { model, baseUrl, apiKey } = {}) {
     );
   }
   const body = { model: cfg.model, messages };
-  // gpt-5 family models are "reasoning" models that think hard by default —
-  // 20+ seconds even for simple tasks. Our tasks (explain, analyze, judge)
-  // are not proofs, so default to low effort for latency. Override with
-  // LLM_REASONING_EFFORT (minimal|low|medium|high, or "default" to omit).
-  // Only sent to OpenAI itself: other OpenAI-compatible providers may
-  // reject parameters they do not know.
-  const effort = process.env.LLM_REASONING_EFFORT ?? "low";
-  if (effort !== "default" && cfg.baseUrl.includes("api.openai.com") && cfg.model.startsWith("gpt-5")) {
-    body.reasoning_effort = effort;
+  // Reasoning effort for gpt-5 family models. Evals showed quality-critical
+  // calls (explainer, judge) REGRESS at low effort (trap 10->8, faithfulness
+  // 11->10, calibration 12->11 on 2026-08-02), so effort is per-call: only
+  // latency-tolerant callers (the background analyzer) ask for "low".
+  // LLM_REASONING_EFFORT in .env overrides everything (speed-over-quality
+  // users can set "low" globally). Only sent to OpenAI itself — other
+  // compatible providers may reject unknown parameters.
+  const resolvedEffort = process.env.LLM_REASONING_EFFORT ?? effort;
+  if (resolvedEffort && cfg.baseUrl.includes("api.openai.com") && cfg.model.startsWith("gpt-5")) {
+    body.reasoning_effort = resolvedEffort;
   }
   const response = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",

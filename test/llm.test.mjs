@@ -74,7 +74,19 @@ test("chat sends the standard request shape and returns trimmed text + usage", a
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://api.openai.com/v1/chat/completions");
   assert.equal(calls[0].opts.headers.Authorization, "Bearer sk-test");
-  assert.deepEqual(JSON.parse(calls[0].opts.body), { model: "gpt-5-mini", messages, reasoning_effort: "low" });
+  // No effort requested -> no reasoning_effort sent (full default quality).
+  assert.deepEqual(JSON.parse(calls[0].opts.body), { model: "gpt-5-mini", messages });
+});
+
+test("chat sends reasoning_effort only when the caller asks for it", async () => {
+  setEnv({ OPENAI_API_KEY: "sk-test" });
+  const calls = [];
+  globalThis.fetch = async (url, opts) => {
+    calls.push({ url, opts });
+    return { ok: true, json: async () => ({ choices: [{ message: { content: "x" } }] }) };
+  };
+  await chat([{ role: "user", content: "hi" }], { effort: "low" });
+  assert.equal(JSON.parse(calls[0].opts.body).reasoning_effort, "low");
 });
 
 test("chat surfaces provider errors with host and status", async () => {

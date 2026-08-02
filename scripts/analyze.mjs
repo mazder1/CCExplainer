@@ -70,7 +70,9 @@ export async function getListenerNotes(transcriptPath, { force = false, model, a
       { role: "system", content: ANALYST_PROMPT },
       { role: "user", content: material },
     ],
-    { model },
+    // Low reasoning effort: this call runs in the background (nobody waits)
+    // and its output is calibration context, not user-facing prose.
+    { model, effort: "low" },
   );
 
   mkdirSync(CACHE_DIR, { recursive: true });

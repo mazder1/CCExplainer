@@ -57,6 +57,8 @@ let startedAt = 0; // wall-clock ms of the last play/resume/seek
 let clockOffset = 0; // seconds of speech already "on the clock" at startedAt
 let paused = false;
 let pollCountdown = 0;
+let rate = 1.0; // playback speed multiplier (0.5x .. 2x), survives across jobs
+let volume = 1.0; // 0..1, survives across jobs
 
 // Self-service narration: the viewer can run the whole pipeline itself —
 // no Claude Code turn involved, fully deterministic. Press [n].
@@ -122,7 +124,9 @@ async function narrate() {
 }
 
 function elapsed() {
-  return paused ? clockOffset : clockOffset + (Date.now() - startedAt) / 1000;
+  // Speech-position advances at `rate` × wall-clock — the karaoke highlight
+  // must follow the sped-up/slowed-down voice, not real time.
+  return paused ? clockOffset : clockOffset + ((Date.now() - startedAt) / 1000) * rate;
 }
 
 function width() {
@@ -171,7 +175,8 @@ function renderPlaying() {
   frame += `${"─".repeat(width())}\n\n`;
   frame += renderWords(t);
   frame += `\n\n${"─".repeat(width())}\n`;
-  frame += `${t.toFixed(1)}s / ${job.duration.toFixed(1)}s   [k] ${paused ? "resume" : "pause"}  [j] -5s  [l] +5s  [0] restart  [s] skip  [q] quit\n`;
+  frame += `${t.toFixed(1)}s / ${job.duration.toFixed(1)}s   ${rate.toFixed(2)}x   vol ${Math.round(volume * 100)}%\n`;
+  frame += `[k] ${paused ? "resume" : "pause"}  [j/l] -/+5s  [↑/↓] volume  [[/]] speed  [0] restart  [s] skip  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -210,10 +215,12 @@ function startJob(nextJob) {
       "Add-Type -AssemblyName PresentationCore",
       "$p = New-Object System.Windows.Media.MediaPlayer",
       `$p.Open([Uri](Resolve-Path '${audioPath}').Path)`,
+      `$p.SpeedRatio = ${Math.round(rate * 100)} / 100`,
+      `$p.Volume = ${Math.round(volume * 100)} / 100`,
       "$p.Play()",
       "while (-not $p.NaturalDuration.HasTimeSpan) { Start-Sleep -Milliseconds 50 }",
       "[Console]::Out.WriteLine('START')",
-      "while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $parts = $line.Split(' '); if ($parts[0] -eq 'PAUSE') { $p.Pause() } elseif ($parts[0] -eq 'PLAY') { $p.Play() } elseif ($parts[0] -eq 'SEEK') { $p.Position = [TimeSpan]::FromMilliseconds([int]$parts[1]) } }",
+      "while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $parts = $line.Split(' '); if ($parts[0] -eq 'PAUSE') { $p.Pause() } elseif ($parts[0] -eq 'PLAY') { $p.Play() } elseif ($parts[0] -eq 'SEEK') { $p.Position = [TimeSpan]::FromMilliseconds([int]$parts[1]) } elseif ($parts[0] -eq 'RATE') { $p.SpeedRatio = [int]$parts[1] / 100 } elseif ($parts[0] -eq 'VOL') { $p.Volume = [int]$parts[1] / 100 } }",
       "$p.Close()",
     ].join("; ");
     player = execFile("powershell", ["-NoProfile", "-Command", psScript], { windowsHide: true });
@@ -267,6 +274,18 @@ function seekTo(seconds) {
   startedAt = Date.now();
 }
 
+function setRate(newRate) {
+  clockOffset = elapsed(); // freeze the clock at the old rate first
+  startedAt = Date.now();
+  rate = Math.min(2, Math.max(0.5, Math.round(newRate * 100) / 100));
+  commandPlayer(`RATE ${Math.round(rate * 100)}`);
+}
+
+function setVolume(v) {
+  volume = Math.min(1, Math.max(0, Math.round(v * 10) / 10));
+  commandPlayer(`VOL ${Math.round(volume * 100)}`);
+}
+
 function finishJob() {
   stopPlayer();
   mode = "done"; // keep the text on screen — the user may want to re-read or replay
@@ -303,6 +322,10 @@ process.stdin.on("data", (key) => {
     if (k === "l") seekTo(elapsed() + 5);
     if (k === "0") seekTo(0);
     if (k === "s") dismissJob();
+    if (k === "[") setRate(rate - 0.25);
+    if (k === "]") setRate(rate + 0.25);
+    if (k === "\x1b[A") setVolume(volume + 0.1); // up arrow
+    if (k === "\x1b[B") setVolume(volume - 0.1); // down arrow
   } else if (mode === "done") {
     if (k === "r") startJob(job);
     if (k === "s") dismissJob();
