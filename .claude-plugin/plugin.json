@@ -1,0 +1,10 @@
+{
+  "name": "ccexplainer",
+  "description": "Adaptive voice summaries for Claude Code — persona-driven spoken explanations of your session",
+  "version": "0.1.0",
+  "author": {
+    "name": "mazder1"
+  },
+  "repository": "https://github.com/mazder1/CCExplainer",
+  "license": "MIT"
+}
