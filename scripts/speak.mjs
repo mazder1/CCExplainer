@@ -73,7 +73,10 @@ if (!text) {
 // "Rachel" — one of ElevenLabs' default voices, available on every account.
 const voiceId = flag("voice", "21m00Tcm4TlvDq8ikWAM");
 const speed = parseFloat(flag("speed", "1.0"));
-const modelId = flag("model", "eleven_flash_v2_5"); // fast + cheapest; try eleven_multilingual_v2 for richer delivery
+// Default: multilingual_v2 — the user's listening test (2026-08-02) found flash_v2_5
+// stutters on longer sentences; quality wins for spoken explanations.
+// Use --model eleven_flash_v2_5 where speed matters more than smoothness.
+const modelId = flag("model", "eleven_multilingual_v2");
 
 // ---------------------------------------------------------------------------
 // Step 3: call the API.
