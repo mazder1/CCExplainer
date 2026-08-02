@@ -54,9 +54,13 @@ export async function getListenerNotes(transcriptPath, { force = false, model, a
   try {
     cache = JSON.parse(readFileSync(CACHE_FILE, "utf8"));
   } catch {}
+  const samePath = cache?.transcriptPath === transcriptPath;
   const grownBy = conversation.length - (cache?.analyzedChars ?? 0);
-  if (!force && cache && cache.transcriptPath === transcriptPath) {
-    if (grownBy < STALE_AFTER_CHARS) return { notes: cache.notes, fromCache: true, stale: false };
+  if (!force && cache) {
+    if (samePath && grownBy < STALE_AFTER_CHARS) return { notes: cache.notes, fromCache: true, stale: false };
+    // Notes describe the USER, not the session — notes cached from an earlier
+    // session are still valid calibration for a new one. Serve them instantly
+    // and let the caller refresh in the background.
     if (allowStale) return { notes: cache.notes, fromCache: true, stale: true };
   }
 

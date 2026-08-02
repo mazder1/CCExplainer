@@ -59,6 +59,10 @@ let paused = false;
 let pollCountdown = 0;
 let voiceSpeed = 1.0; // synthesis speed for the NEXT narration (0.7 .. 1.2)
 let volume = 1.0; // 0..1, live, survives across jobs
+// fast = low reasoning effort: ~5s instead of ~20s per script, at a small
+// measured quality cost (evals 2026-08-02: trap -2, faithfulness -1 of 12).
+// The user's +/- ratings are the live check on whether fast mode annoys them.
+let fastMode = true;
 
 // Self-service narration: the viewer can run the whole pipeline itself —
 // no Claude Code turn involved, fully deterministic. Press [n].
@@ -132,8 +136,13 @@ async function narrate() {
       notes = result.notes;
       if (result.stale) refreshNotesInBackground(transcriptPath); // fresh for next time
     } catch {} // notes are optional — proceed uncalibrated rather than fail
-    generating = `writing the script (${currentPersona})…`;
-    const gen = await generateExplanation({ personaName: currentPersona, notes, lastMessageText: msg.text });
+    generating = `writing the script (${currentPersona}, ${fastMode ? "fast" : "quality"} mode)…`;
+    const gen = await generateExplanation({
+      personaName: currentPersona,
+      notes,
+      lastMessageText: msg.text,
+      effort: fastMode ? "low" : undefined,
+    });
     generating = "synthesizing voice…";
     const { audio, words, duration } = await synthesizeWithTimings(gen.text, {
       apiKey: process.env.ELEVENLABS_API_KEY,
@@ -176,7 +185,7 @@ function renderIdle() {
     : `${DIM}Press [n] to narrate — or use /speak in Claude Code.${RESET}\n\n`;
   const target = targetLine();
   if (target) frame += `${target}\n\n`;
-  frame += `${"─".repeat(width())}\n[n] narrate  [←/→] older/newer msg  [1/2/3] persona: ${currentPersona}  [[/]] voice speed ${voiceSpeed.toFixed(1)}x  [q] quit\n`;
+  frame += `${"─".repeat(width())}\n[n] narrate  [←/→] older/newer msg  [1/2/3] persona: ${currentPersona}  [f] ${fastMode ? "fast" : "quality"} mode  [[/]] speed ${voiceSpeed.toFixed(1)}x  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -367,6 +376,7 @@ process.stdin.on("data", (key) => {
   }
   if (mode !== "playing") {
     if (k === "n") narrate();
+    if (k === "f") fastMode = !fastMode;
     if (k === "[") setVoiceSpeed(voiceSpeed - 0.1);
     if (k === "]") setVoiceSpeed(voiceSpeed + 0.1);
     const personaKey = ["1", "2", "3"].indexOf(k);

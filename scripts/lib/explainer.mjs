@@ -75,10 +75,10 @@ export function buildExplainerMessages({ persona, notes = null, lastMessageText 
 // back. Models fix a named violation far more reliably than they avoid it.
 // Both explain.mjs and the eval runner call THIS, so evals measure exactly
 // what production ships, retry included.
-export async function generateExplanation({ personaName, notes = null, lastMessageText, model } = {}) {
+export async function generateExplanation({ personaName, notes = null, lastMessageText, model, effort } = {}) {
   const persona = loadPersona(personaName);
   const messages = buildExplainerMessages({ persona, notes, lastMessageText });
-  let result = await chat(messages, { model });
+  let result = await chat(messages, { model, effort });
   let lint = lintExplanation(result.text, { persona: personaName });
   let retried = false;
   if (!lint.ok) {
@@ -93,7 +93,7 @@ export async function generateExplanation({ personaName, notes = null, lastMessa
           content: `Your explanation broke these mechanical rules: ${violationList}. Rewrite the SAME explanation with every violation fixed. Keep the content; correct the form. Output only the rewritten explanation.`,
         },
       ],
-      { model },
+      { model, effort },
     );
     lint = lintExplanation(result.text, { persona: personaName });
   }
