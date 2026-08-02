@@ -12,7 +12,7 @@
 //   [0] restart speech      [s] skip/dismiss   [q] quit
 // After a speech ends the text stays on screen — [r] replays it.
 
-import { writeFileSync, unlinkSync } from "node:fs";
+import { writeFileSync, unlinkSync, appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -84,6 +84,31 @@ function sessionTurns() {
   return turnsCache.turns;
 }
 
+// Live user ratings — the harness's human anchor. Every + / - press appends
+// one labeled real-world case (message, notes, explanation, verdict) to a
+// local JSONL file: ground truth for judging the judge and for the metric
+// experiments that need fresh non-fixture data.
+const RATINGS_FILE = join(".ccexplainer", "ratings.jsonl");
+function rateJob(rating) {
+  if (!job) return;
+  job.rating = rating;
+  mkdirSync(".ccexplainer", { recursive: true });
+  appendFileSync(
+    RATINGS_FILE,
+    JSON.stringify({
+      ratedAt: new Date().toISOString(),
+      jobId: job.id,
+      rating, // "good" | "bad" — re-rating appends again; latest wins
+      persona: job.meta?.persona ?? null,
+      voiceSpeed: job.meta?.voiceSpeed ?? null,
+      offset: job.meta?.offset ?? null,
+      explanation: job.text,
+      sourceMessage: job.meta?.sourceMessage ?? null,
+      listenerNotes: job.meta?.notes ?? null,
+    }) + "\n",
+  );
+}
+
 function targetLine() {
   if (currentOffset === 0) return null; // default: no noise on screen
   const msg = pickMessageToExplain(sessionTurns(), { offset: currentOffset });
@@ -115,7 +140,13 @@ async function narrate() {
       speed: voiceSpeed,
     });
     generating = null;
-    startJob({ text: gen.text, words, duration, audioBase64: audio.toString("base64") });
+    startJob({
+      text: gen.text,
+      words,
+      duration,
+      audioBase64: audio.toString("base64"),
+      meta: { persona: currentPersona, voiceSpeed, offset: currentOffset, sourceMessage: msg.text, notes },
+    });
   } catch (err) {
     generating = `error: ${String(err.message).slice(0, 60)}`;
     setTimeout(() => {
@@ -170,18 +201,18 @@ function renderWords(t) {
 function renderPlaying() {
   const t = elapsed();
   let frame = HOME_AND_CLEAR;
-  frame += `CCExplainer viewer — ${paused ? "⏸ paused" : "speaking"}\n`;
+  frame += `CCExplainer viewer — ${paused ? "⏸ paused" : "speaking"}${job.rating ? `  · rated ${job.rating}` : ""}\n`;
   frame += `${"─".repeat(width())}\n\n`;
   frame += renderWords(t);
   frame += `\n\n${"─".repeat(width())}\n`;
   frame += `${t.toFixed(1)}s / ${job.duration.toFixed(1)}s   vol ${Math.round(volume * 100)}%   next voice speed ${voiceSpeed.toFixed(1)}x\n`;
-  frame += `[k] ${paused ? "resume" : "pause"}  [j/l] -/+5s  [↑/↓] volume  [[/]] next speed  [0] restart  [s] skip  [q] quit\n`;
+  frame += `[k] ${paused ? "resume" : "pause"}  [j/l] -/+5s  [↑/↓] volume  [[/]] next speed  [+/-] rate  [0] restart  [s] skip  [q] quit\n`;
   process.stdout.write(frame);
 }
 
 function renderDone() {
   let frame = HOME_AND_CLEAR;
-  frame += "CCExplainer viewer — finished\n";
+  frame += `CCExplainer viewer — finished${job.rating ? `  · rated ${job.rating}` : ""}\n`;
   frame += `${"─".repeat(width())}\n\n`;
   frame += renderWords(Infinity); // everything "already spoken": plain text
   frame += `\n\n${"─".repeat(width())}\n`;
@@ -189,7 +220,7 @@ function renderDone() {
   if (target) frame += `${target}\n`;
   frame += generating
     ? `♪ ${generating}\n`
-    : `[r] replay  [n] narrate  [←/→] older/newer  [1/2/3] persona: ${currentPersona}  [s] dismiss  [q] quit\n`;
+    : `[r] replay  [+/-] rate  [n] narrate  [←/→] older/newer  [1/2/3] persona: ${currentPersona}  [s] dismiss  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -202,6 +233,7 @@ function renderDone() {
 
 function startJob(nextJob) {
   job = nextJob;
+  job.id = job.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   mode = "playing";
   paused = false;
   clockOffset = 0;
@@ -317,6 +349,8 @@ process.stdin.resume();
 process.stdin.on("data", (key) => {
   const k = key.toString();
   if (k === "q" || k === "\x03") cleanupAndExit();
+  if (k === "+") rateJob("good");
+  if (k === "-") rateJob("bad");
   if (mode === "playing") {
     if (k === "k") togglePause();
     if (k === "j") seekTo(elapsed() - 5);

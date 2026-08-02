@@ -127,7 +127,14 @@ async function ensureViewer() {
 // If the karaoke viewer is running (or just auto-opened), hand the speech to
 // it — it plays the audio AND highlights each word as it is spoken.
 if (await ensureViewer()) {
-  writeJob({ createdAt: new Date().toISOString(), text, words, duration, audioBase64: audio.toString("base64") });
+  writeJob({
+    createdAt: new Date().toISOString(),
+    text,
+    words,
+    duration,
+    audioBase64: audio.toString("base64"),
+    meta: { source: "speak-cli", voiceSpeed: speed },
+  });
   console.log("Karaoke viewer detected — speaking there.");
   process.exit(0);
 }
