@@ -12,8 +12,9 @@
 
 import { writeFileSync, mkdirSync, unlinkSync } from "node:fs";
 import { execFile } from "node:child_process";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { synthesizeWithTimings } from "./lib/tts.mjs";
 import { viewerAlive, writeJob } from "./lib/mailbox.mjs";
 
@@ -95,9 +96,35 @@ try {
   process.exit(1);
 }
 
-// If the karaoke viewer is running (fresh heartbeat), hand the speech to it
-// — it plays the audio AND highlights each word as it is spoken.
-if (viewerAlive()) {
+// The karaoke viewer opens ON ITS OWN when possible: if none is running and
+// we are inside Windows Terminal, ask it to split the current window and
+// start the viewer in the new pane, then wait for its heartbeat. If that
+// is impossible (different terminal, wt missing, opt-out), we fall back to
+// invisible background playback — the viewer is never a requirement.
+async function ensureViewer() {
+  if (viewerAlive()) return true;
+  if (process.platform !== "win32") return false;
+  if (!process.env.WT_SESSION) return false; // not inside Windows Terminal
+  if (process.env.CCEXPLAINER_NO_AUTOSPAWN) return false; // explicit opt-out
+  const viewerPath = join(dirname(fileURLToPath(import.meta.url)), "viewer.mjs");
+  try {
+    execFile("cmd", ["/c", "wt", "-w", "0", "split-pane", "-V", "-d", process.cwd(), "node", viewerPath], {
+      windowsHide: true,
+    });
+  } catch {
+    return false;
+  }
+  // Give the new pane a few seconds to boot and announce itself.
+  for (let i = 0; i < 25; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    if (viewerAlive()) return true;
+  }
+  return false;
+}
+
+// If the karaoke viewer is running (or just auto-opened), hand the speech to
+// it — it plays the audio AND highlights each word as it is spoken.
+if (await ensureViewer()) {
   writeJob({ createdAt: new Date().toISOString(), text, words, duration, audioBase64: audio.toString("base64") });
   console.log("Karaoke viewer detected — speaking there.");
   process.exit(0);
