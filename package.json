@@ -1,0 +1,14 @@
+{
+  "name": "ccexplainer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adaptive voice explanations for Claude Code sessions",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

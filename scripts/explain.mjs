@@ -15,6 +15,7 @@ import {
   projectTranscriptDir,
   latestTranscript,
   readConversation,
+  pickMessageToExplain,
 } from "./lib/transcript.mjs";
 import { getListenerNotes } from "./analyze.mjs";
 import { chat, llmConfig } from "./lib/llm.mjs";
@@ -34,23 +35,11 @@ const useNotes = !args.includes("--no-notes");
 const live = args.includes("--live");
 const transcriptArg = args.find((a) => a.endsWith(".jsonl"));
 
-// The material: the LAST assistant message in the session.
-//
-// --live is for running INSIDE a session via /speak: at that moment the
-// transcript already contains the /speak invocation itself (a USER turn) and
-// possibly the assistant's in-progress activity after it. What the user
-// wants explained is the reply they just read — the last CLAUDE turn BEFORE
-// that final USER turn — so in live mode we look there.
+// The material: the last assistant message — or, in --live mode, the last
+// one BEFORE the /speak invocation (see pickMessageToExplain for why).
 const transcriptPath = transcriptArg ?? latestTranscript(projectTranscriptDir(process.cwd()));
 const turns = readConversation(transcriptPath);
-let lastMessage;
-if (live) {
-  const lastUserIndex = turns.findLastIndex((t) => t.role === "USER");
-  lastMessage = [...turns.slice(0, Math.max(lastUserIndex, 0))]
-    .reverse()
-    .find((t) => t.role === "CLAUDE");
-}
-lastMessage ??= [...turns].reverse().find((t) => t.role === "CLAUDE");
+const lastMessage = pickMessageToExplain(turns, { live });
 if (!lastMessage) {
   console.error("No assistant message found in this session yet.");
   process.exit(1);

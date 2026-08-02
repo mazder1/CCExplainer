@@ -1,5 +1,7 @@
 # CCExplainer
 
+[![CI](https://github.com/mazder1/CCExplainer/actions/workflows/ci.yml/badge.svg)](https://github.com/mazder1/CCExplainer/actions/workflows/ci.yml)
+
 **A voice that explains your Claude Code session to you — not a voice that reads it at you.**
 
 Claude Code's built-in text-to-speech reads messages verbatim: every file path, every code identifier, monotonously. CCExplainer takes a different approach: when you ask, an agent looks at the **last message** Claude sent you, considers **what you personally tend to struggle with** (learned from your session history), writes a short explanation *for the ear* in a persona of your choice — and speaks it through [ElevenLabs](https://elevenlabs.io).
@@ -85,6 +87,14 @@ Useful flags: `--persona <name>`, `--speed 0.7..1.2`, `--voice <elevenlabs-voice
 - Per-persona voice & speed pairing; marketplace packaging.
 
 The original design brief — including ideas since evolved or rejected — is preserved in [BRIEF.md](BRIEF.md).
+
+## Tests
+
+```bash
+npm test        # or: node --test
+```
+
+Zero test dependencies — the suite runs on Node's built-in test runner, needs no API keys, and never touches the network (providers are faked). CI runs it on Linux and Windows on every push.
 
 ## Repo layout
 

@@ -67,3 +67,22 @@ export function readConversation(transcriptPath) {
 export function conversationAsText(turns) {
   return turns.map((t) => `${t.role} @ ${t.time}:\n${t.text}`).join("\n\n");
 }
+
+// Which assistant message should the explainer explain?
+//
+// Normally: the last CLAUDE turn. In --live mode (running inside a session
+// via /speak) the transcript already contains the /speak invocation itself
+// (a USER turn) and possibly in-progress assistant activity after it — so
+// the message the user actually means is the last CLAUDE turn BEFORE that
+// final USER turn.
+export function pickMessageToExplain(turns, { live = false } = {}) {
+  let picked;
+  if (live) {
+    const lastUserIndex = turns.findLastIndex((t) => t.role === "USER");
+    picked = turns
+      .slice(0, Math.max(lastUserIndex, 0))
+      .reverse()
+      .find((t) => t.role === "CLAUDE");
+  }
+  return picked ?? [...turns].reverse().find((t) => t.role === "CLAUDE");
+}
