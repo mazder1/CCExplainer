@@ -63,6 +63,32 @@ let pollCountdown = 0;
 const PERSONAS = ["educator", "senior-engineer", "rubber-duck"];
 let currentPersona = PERSONAS[0];
 let generating = null; // status line while the pipeline runs, or null
+let currentOffset = 0; // 0 = latest assistant message, 1 = one before it, ...
+
+// Cached view of the latest session (re-read at most every 3 s) so arrow-key
+// browsing and previews stay snappy without re-parsing a megabyte per press.
+let turnsCache = { turns: [], at: 0 };
+function sessionTurns() {
+  if (Date.now() - turnsCache.at > 3000) {
+    try {
+      turnsCache = {
+        turns: readConversation(latestTranscript(projectTranscriptDir(process.cwd()))),
+        at: Date.now(),
+      };
+    } catch {
+      turnsCache = { turns: [], at: Date.now() };
+    }
+  }
+  return turnsCache.turns;
+}
+
+function targetLine() {
+  if (currentOffset === 0) return null; // default: no noise on screen
+  const msg = pickMessageToExplain(sessionTurns(), { offset: currentOffset });
+  if (!msg) return `Target: ${currentOffset} back — (no message that far back)`;
+  const snippet = msg.text.replace(/\s+/g, " ").slice(0, 58);
+  return `Target: ${currentOffset} back — "${snippet}…"`;
+}
 
 async function narrate() {
   if (generating || mode === "playing") return;
@@ -70,8 +96,8 @@ async function narrate() {
     generating = "reading the session…";
     const transcriptPath = latestTranscript(projectTranscriptDir(process.cwd()));
     const turns = readConversation(transcriptPath);
-    const msg = pickMessageToExplain(turns);
-    if (!msg) throw new Error("no assistant message in the latest session");
+    const msg = pickMessageToExplain(turns, { offset: currentOffset });
+    if (!msg) throw new Error(`no assistant message at offset ${currentOffset}`);
     let notes = null;
     try {
       generating = "updating listener notes…";
@@ -111,8 +137,10 @@ function renderIdle() {
   frame += `${"─".repeat(width())}\n\n`;
   frame += generating
     ? `♪ ${generating}\n\n`
-    : `${DIM}Press [n] to narrate the latest message — or use /speak in Claude Code.${RESET}\n\n`;
-  frame += `${"─".repeat(width())}\n[n] narrate  [1/2/3] persona: ${currentPersona}  [q] quit\n`;
+    : `${DIM}Press [n] to narrate — or use /speak in Claude Code.${RESET}\n\n`;
+  const target = targetLine();
+  if (target) frame += `${target}\n\n`;
+  frame += `${"─".repeat(width())}\n[n] narrate  [←/→] older/newer msg  [1/2/3] persona: ${currentPersona}  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -151,9 +179,11 @@ function renderDone() {
   frame += `${"─".repeat(width())}\n\n`;
   frame += renderWords(Infinity); // everything "already spoken": plain text
   frame += `\n\n${"─".repeat(width())}\n`;
+  const target = targetLine();
+  if (target) frame += `${target}\n`;
   frame += generating
     ? `♪ ${generating}\n`
-    : `[r] replay  [n] narrate latest  [1/2/3] persona: ${currentPersona}  [s] dismiss  [q] quit\n`;
+    : `[r] replay  [n] narrate  [←/→] older/newer  [1/2/3] persona: ${currentPersona}  [s] dismiss  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -279,6 +309,12 @@ process.stdin.on("data", (key) => {
     if (k === "n") narrate();
     const personaKey = ["1", "2", "3"].indexOf(k);
     if (personaKey !== -1) currentPersona = PERSONAS[personaKey];
+    if (k === "\x1b[D") {
+      // left arrow: older — but never past the oldest assistant message
+      const max = sessionTurns().filter((t) => t.role === "CLAUDE").length - 1;
+      currentOffset = Math.min(currentOffset + 1, Math.max(max, 0));
+    }
+    if (k === "\x1b[C") currentOffset = Math.max(0, currentOffset - 1); // right: newer
   }
 });
 
