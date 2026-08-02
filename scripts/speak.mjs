@@ -48,9 +48,27 @@ function flag(name, fallback) {
   return i !== -1 && args[i + 1] ? args[i + 1] : fallback;
 }
 
+// The text can arrive two ways: as an argument, or PIPED IN from another
+// program ("-" means "read standard input" — a classic CLI convention).
+// Piping is what lets explain.mjs and speak.mjs chain into one pipeline.
+async function readStdin() {
+  let data = "";
+  for await (const chunk of process.stdin) data += chunk;
+  return data.trim();
+}
+
+const positional = args.find(
+  (a) => !a.startsWith("--") && args[args.indexOf(a) - 1]?.startsWith("--") !== true,
+);
 const text =
-  args.find((a) => !a.startsWith("--") && args[args.indexOf(a) - 1]?.startsWith("--") !== true) ??
-  "Hello! I am C C Explainer, and this is my first spoken sentence.";
+  positional === "-" || (!positional && !process.stdin.isTTY)
+    ? await readStdin()
+    : positional ?? "Hello! I am C C Explainer, and this is my first spoken sentence.";
+
+if (!text) {
+  console.error("No text to speak — the pipe was empty.");
+  process.exit(1);
+}
 
 // "Rachel" — one of ElevenLabs' default voices, available on every account.
 const voiceId = flag("voice", "21m00Tcm4TlvDq8ikWAM");

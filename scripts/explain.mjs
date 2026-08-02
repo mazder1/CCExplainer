@@ -35,12 +35,26 @@ function flag(name, fallback) {
 const personaName = flag("persona", "educator");
 const modelId = flag("model", "gpt-5-mini");
 const useNotes = !args.includes("--no-notes");
+const live = args.includes("--live");
 const transcriptArg = args.find((a) => a.endsWith(".jsonl"));
 
 // The material: the LAST assistant message in the session.
+//
+// --live is for running INSIDE a session via /speak: at that moment the
+// transcript already contains the /speak invocation itself (a USER turn) and
+// possibly the assistant's in-progress activity after it. What the user
+// wants explained is the reply they just read — the last CLAUDE turn BEFORE
+// that final USER turn — so in live mode we look there.
 const transcriptPath = transcriptArg ?? latestTranscript(projectTranscriptDir(process.cwd()));
 const turns = readConversation(transcriptPath);
-const lastMessage = [...turns].reverse().find((t) => t.role === "CLAUDE");
+let lastMessage;
+if (live) {
+  const lastUserIndex = turns.findLastIndex((t) => t.role === "USER");
+  lastMessage = [...turns.slice(0, Math.max(lastUserIndex, 0))]
+    .reverse()
+    .find((t) => t.role === "CLAUDE");
+}
+lastMessage ??= [...turns].reverse().find((t) => t.role === "CLAUDE");
 if (!lastMessage) {
   console.error("No assistant message found in this session yet.");
   process.exit(1);
