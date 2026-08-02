@@ -17,6 +17,14 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { touchHeartbeat, clearHeartbeat, claimNextJob } from "./lib/mailbox.mjs";
+import { projectTranscriptDir, latestTranscript, readConversation, pickMessageToExplain } from "./lib/transcript.mjs";
+import { getListenerNotes } from "./analyze.mjs";
+import { generateExplanation } from "./lib/explainer.mjs";
+import { synthesizeWithTimings } from "./lib/tts.mjs";
+
+try {
+  process.loadEnvFile();
+} catch {}
 
 const ALT_SCREEN_ON = "\x1b[?1049h";
 const ALT_SCREEN_OFF = "\x1b[?1049l";
@@ -50,6 +58,41 @@ let clockOffset = 0; // seconds of speech already "on the clock" at startedAt
 let paused = false;
 let pollCountdown = 0;
 
+// Self-service narration: the viewer can run the whole pipeline itself —
+// no Claude Code turn involved, fully deterministic. Press [n].
+const PERSONAS = ["educator", "senior-engineer", "rubber-duck"];
+let currentPersona = PERSONAS[0];
+let generating = null; // status line while the pipeline runs, or null
+
+async function narrate() {
+  if (generating || mode === "playing") return;
+  try {
+    generating = "reading the session…";
+    const transcriptPath = latestTranscript(projectTranscriptDir(process.cwd()));
+    const turns = readConversation(transcriptPath);
+    const msg = pickMessageToExplain(turns);
+    if (!msg) throw new Error("no assistant message in the latest session");
+    let notes = null;
+    try {
+      generating = "updating listener notes…";
+      notes = (await getListenerNotes(transcriptPath, {})).notes;
+    } catch {} // notes are optional — proceed uncalibrated rather than fail
+    generating = `writing the script (${currentPersona})…`;
+    const gen = await generateExplanation({ personaName: currentPersona, notes, lastMessageText: msg.text });
+    generating = "synthesizing voice…";
+    const { audio, words, duration } = await synthesizeWithTimings(gen.text, {
+      apiKey: process.env.ELEVENLABS_API_KEY,
+    });
+    generating = null;
+    startJob({ text: gen.text, words, duration, audioBase64: audio.toString("base64") });
+  } catch (err) {
+    generating = `error: ${String(err.message).slice(0, 60)}`;
+    setTimeout(() => {
+      if (generating?.startsWith("error")) generating = null;
+    }, 6000);
+  }
+}
+
 function elapsed() {
   return paused ? clockOffset : clockOffset + (Date.now() - startedAt) / 1000;
 }
@@ -66,8 +109,10 @@ function renderIdle() {
   let frame = HOME_AND_CLEAR;
   frame += "CCExplainer viewer\n";
   frame += `${"─".repeat(width())}\n\n`;
-  frame += `${DIM}Waiting for /speak …${RESET}\n\n`;
-  frame += `${"─".repeat(width())}\n[q] quit\n`;
+  frame += generating
+    ? `♪ ${generating}\n\n`
+    : `${DIM}Press [n] to narrate the latest message — or use /speak in Claude Code.${RESET}\n\n`;
+  frame += `${"─".repeat(width())}\n[n] narrate  [1/2/3] persona: ${currentPersona}  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -105,7 +150,10 @@ function renderDone() {
   frame += "CCExplainer viewer — finished\n";
   frame += `${"─".repeat(width())}\n\n`;
   frame += renderWords(Infinity); // everything "already spoken": plain text
-  frame += `\n\n${"─".repeat(width())}\n[r] replay  [s] dismiss  [q] quit\n`;
+  frame += `\n\n${"─".repeat(width())}\n`;
+  frame += generating
+    ? `♪ ${generating}\n`
+    : `[r] replay  [n] narrate latest  [1/2/3] persona: ${currentPersona}  [s] dismiss  [q] quit\n`;
   process.stdout.write(frame);
 }
 
@@ -226,6 +274,11 @@ process.stdin.on("data", (key) => {
   } else if (mode === "done") {
     if (k === "r") startJob(job);
     if (k === "s") dismissJob();
+  }
+  if (mode !== "playing") {
+    if (k === "n") narrate();
+    const personaKey = ["1", "2", "3"].indexOf(k);
+    if (personaKey !== -1) currentPersona = PERSONAS[personaKey];
   }
 });
 

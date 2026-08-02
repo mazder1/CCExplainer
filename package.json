@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "eval": "node evals/run.mjs"
+    "eval": "node evals/run.mjs",
+    "speak": "node scripts/explain.mjs | node scripts/speak.mjs -"
   }
 }
