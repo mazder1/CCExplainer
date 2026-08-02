@@ -4,31 +4,45 @@
 
 **A voice that explains your Claude Code session to you — not a voice that reads it at you.**
 
-Claude Code's built-in text-to-speech reads messages verbatim: every file path, every code identifier, monotonously. CCExplainer takes a different approach: when you ask, an agent looks at the **last message** Claude sent you, considers **what you personally tend to struggle with** (learned from your session history), writes a short explanation *for the ear* in a persona of your choice — and speaks it through [ElevenLabs](https://elevenlabs.io).
-
-It is a [Claude Code plugin](https://code.claude.com/docs/en/plugins.md): type `/ccexplainer:speak` after any reply, and a few seconds later you hear a calm human explanation of what just happened. No windows open, no files are left behind — just the voice.
+Claude Code's built-in text-to-speech reads messages verbatim: every file path, every code identifier, monotonously. CCExplainer takes a different approach: an agent looks at the **last message** Claude sent you (or any earlier one you pick), considers **what you personally tend to struggle with** (learned from your session history), writes a short explanation *for the ear* in a persona of your choice — and speaks it through [ElevenLabs](https://elevenlabs.io) while a terminal pane **highlights each word as it is spoken**, karaoke-style, so ear and eye never lose each other.
 
 ## How it works
 
 ```
                         ┌──────────────────────────┐
-  session history ────▶ │ comprehension analyzer       │
-  (whole story)         │ "what does this user find    │
-                        │  hard? what do they know?"   │
+  session history ────▶ │ comprehension analyzer       │  cached, refreshed in the
+  (whole story)         │ "what does this user find    │  background — narration
+                        │  hard? what do they know?"   │  never waits for it
                         └────────────┬─────────────┘
-                                     │ listener notes (cached, never spoken)
+                                     │ listener notes (never spoken)
                                      ▼
-                        ┌──────────────────────────┐
-  last Claude message ▶ │ explainer (persona-styled)   │──▶ ElevenLabs TTS ──▶ 🔊
-  (the actual subject)  └──────────────────────────┘
+                        ┌──────────────────────────┐      ElevenLabs TTS
+  chosen message ─────▶ │ explainer (persona-styled)   │──▶  with per-word     ──▶ 🎤 karaoke viewer
+  (the actual subject)  └──────────────────────────┘      timestamps
 ```
 
-Two model calls with strictly separated jobs:
+Two model calls with strictly separated jobs: the **analyzer** mines history into *listener notes* (which concepts this user struggles with, what they know, how they like things explained); the **explainer** explains *only the chosen message*, with the notes as invisible calibration — hard concepts get depth, mastered ones get a mention, solved past problems are never re-explained, and the explanation never reveals that notes exist. It is a narrator, never an actor: it reports, it does not offer to change your code.
 
-1. **The analyzer** reads session history and produces *listener notes* — which concepts this user has struggled with, what they handle confidently, how they like things explained. Notes are cached locally and refreshed only as real new history accumulates.
-2. **The explainer** explains *only the latest message*. The notes are calibration, never content: concepts you find hard get explained from first principles, things you know get a passing mention, and problems already solved earlier in the session are never re-explained. The calibration is deliberately invisible — it feels like a tutor who simply knows you.
+Session context comes from Claude Code's own transcript files on disk (`~/.claude/projects/`) — no hooks into internals, no telemetry. Everything stays local except the API calls you configured. Audio plays from a temp file deleted after playback; nothing persists.
 
-Session context comes straight from Claude Code's own transcript files on disk (`~/.claude/projects/`) — no hooks into internals, no telemetry. Everything stays on your machine except the two API calls you configured (OpenAI for the text, ElevenLabs for the voice). Generated audio plays from a temp file that is deleted the moment playback ends.
+## The karaoke viewer
+
+A companion terminal pane (auto-opened on first use in Windows Terminal, or run `node scripts/viewer.mjs` yourself, from the repo root). It idles until a narration arrives, then plays the voice and lights up each word at the moment it is spoken — timing comes from ElevenLabs' per-character alignment, not guesswork.
+
+| Keys (idle) | |
+|---|---|
+| `n` | narrate the targeted message — runs the whole pipeline, no Claude Code needed |
+| `←` / `→` | target an older / newer message (with a preview snippet) |
+| `1` `2` `3` | persona: educator / senior-engineer / rubber-duck |
+| `[` / `]` | voice speaking speed for the next narration (0.7–1.2×) |
+
+| Keys (during speech) | |
+|---|---|
+| `k` | pause / resume |
+| `j` / `l` | jump back / forward 5 seconds (voice and highlight together) |
+| `0` | restart the speech |
+| `↑` / `↓` | volume |
+| `s` | skip · after it ends, the text stays on screen and `r` replays |
 
 ## Personas
 
@@ -40,55 +54,37 @@ A persona is a plain-text style file in [`personas/`](personas/) — edit one, o
 | `senior-engineer` | Terse status brief: outcome, changes, risks, next step; ~30 seconds |
 | `rubber-duck` | Mirrors what happened, then asks you two or three questions worth thinking about |
 
-## Running it today
+## Running it
 
-> ⚖️ Work in progress — the core pipeline works end-to-end as a plugin; the fancier UI is [on the roadmap](#roadmap).
-
-**You need:** Node 22+, a [Claude Code](https://claude.com/claude-code) install, an [ElevenLabs API key](https://elevenlabs.io) (free tier is fine) and an [OpenAI API key](https://platform.openai.com).
+**You need:** Node 22+, [Claude Code](https://claude.com/claude-code), an [ElevenLabs API key](https://elevenlabs.io) (free tier is fine) and an LLM API key — OpenAI by default, or any compatible provider (Kimi, DeepSeek, Groq, Anthropic's compatibility endpoint, local Ollama): recipes in [.env.example](.env.example).
 
 ```bash
 git clone https://github.com/mazder1/CCExplainer
 cd CCExplainer
-cp .env.example .env     # then put your two keys in .env
+cp .env.example .env     # put your keys in .env
 ```
 
-**As a plugin** (the real experience):
+**As a plugin:**
 
 ```bash
 claude --plugin-dir .
 ```
 
-…then work normally, and whenever a reply deserves a spoken explanation:
-
 ```
-/ccexplainer:speak                    # educator explains the last message
-/ccexplainer:speak senior-engineer    # or pick a persona
+/ccexplainer:speak                     # educator explains the last message
+/ccexplainer:speak senior-engineer -2  # persona + offset: two messages back
 ```
 
-**As standalone scripts** (each stage is independently runnable — useful for tinkering):
+**Without Claude Code at all:** run the viewer (`node scripts/viewer.mjs`) and press `n` — or `npm run speak` for audio-only. Each pipeline stage is also independently runnable for tinkering:
 
 ```bash
 node scripts/read-transcript.mjs      # print the latest session as readable text
 node scripts/analyze.mjs              # see your own listener notes
-node scripts/explain.mjs              # explanation of the last message (text)
+node scripts/explain.mjs --offset -2  # explanation text for an earlier message
 node scripts/speak.mjs "Hello there"  # just the voice
-node scripts/explain.mjs | node scripts/speak.mjs -   # the whole pipeline, piped
-node scripts/viewer.mjs               # karaoke viewer: run in a 2nd terminal pane —
-                                      # /speak then highlights each word as it is spoken
 ```
 
-Useful flags: `--persona <name>`, `--speed 0.7..1.2`, `--voice <elevenlabs-voice-id>`, `--model` (defaults: `eleven_multilingual_v2` for speech — chosen by ear over the faster `eleven_flash_v2_5` — and `gpt-5-mini` for text), `--keep` to keep the MP3, `--no-notes` to skip calibration.
-
-**Bring your own model:** the brain speaks the standard chat-completions dialect, so any OpenAI-compatible provider works — Kimi, DeepSeek, Groq, Anthropic's compatibility endpoint, or a free local model via Ollama. Set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `.env`; ready-made recipes are in [.env.example](.env.example).
-
-## Roadmap
-
-- **Karaoke viewer** (next): a companion terminal pane that shows the explanation text and highlights each sentence as the voice speaks it, using ElevenLabs per-character timestamps — so ear and eye never desync. Playback keys (J/K/L) live here too.
-- Cross-session learner profile — remember next week what you struggled with today.
-- Opt-in auto-narrate via the `Stop` hook.
-- Per-persona voice & speed pairing; marketplace packaging.
-
-The original design brief — including ideas since evolved or rejected — is preserved in [BRIEF.md](BRIEF.md).
+Useful flags: `--persona <name>`, `--offset <n>`, `--speed 0.7..1.2`, `--voice <elevenlabs-voice-id>`, `--model`, `--keep` (keep the MP3), `--no-notes` (skip calibration). Defaults: `eleven_multilingual_v2` for speech (chosen by listening test over the faster flash model) and `gpt-5-mini` for text, with reasoning effort tuned per call — full depth where quality matters, low where nobody waits (`LLM_REASONING_EFFORT` overrides).
 
 ## Tests
 
@@ -96,20 +92,33 @@ The original design brief — including ideas since evolved or rejected — is p
 npm test        # or: node --test
 ```
 
-Zero test dependencies — the suite runs on Node's built-in test runner, needs no API keys, and never touches the network (providers are faked). CI runs it on Linux and Windows on every push.
+Zero test dependencies — Node's built-in runner, no API keys, no network (providers are faked). CI runs Linux + Windows on every push.
 
 ## Output-quality evals
 
-Tests prove the plumbing; [`evals/`](evals/) judges the words. Eleven hand-written trap fixtures each tempt one forbidden failure (re-explaining a solved problem, revealing the listener notes, speaking a raw file path…). `npm run eval` generates a real explanation per fixture through the production prompt path, lints it mechanically for free, then has a judge model rule on each trap with quoted evidence — and prints the scorecard as deltas against the committed [`baseline.json`](evals/baseline.json), so any prompt change is answered with "improved / unchanged / REGRESSION" instead of vibes. Costs a few cents per run (uses your configured LLM key); judge provider is overridable via `EVAL_JUDGE_*` env vars.
+Tests prove the plumbing; [`evals/`](evals/) judges the words. Twelve hand-written trap fixtures each tempt one forbidden failure — re-explaining a solved problem, revealing the listener notes, speaking a raw file path, offering to act instead of narrating. `npm run eval` generates a real explanation per fixture **through the production code path**, lints it mechanically for free, then has a judge model rule on each trap with quoted evidence — reported as deltas against the committed [`baseline.json`](evals/baseline.json), so every prompt change is answered with *improved / unchanged / REGRESSION* instead of vibes. The harness has already paid for itself twice: it caught a latency optimization silently degrading rule-following, and a sentence-level embedding experiment surfaced a failure mode (the narrator offering to write code) that no other layer was watching for. Costs a few cents per run; judge provider overridable via `EVAL_JUDGE_*`.
+
+Current baseline: scope, calibration, coherence and lint at **12/12**; trap avoidance 10/12; faithfulness 11/12.
+
+## Roadmap
+
+- Verbalized math — formulas spoken as words, not symbols (needs its own eval round)
+- Cross-session learner profile — remember next week what you struggled with today
+- Opt-in auto-narrate via the `Stop` hook; streaming synthesis for faster first sound
+- Marketplace packaging; smoother word-highlight rendering
+
+The original design brief — including ideas since evolved or rejected — is preserved in [BRIEF.md](BRIEF.md).
 
 ## Repo layout
 
 ```
 .claude-plugin/     plugin manifest
 skills/             /ccexplainer:speak and friends (slash commands)
-scripts/            the pipeline: read-transcript, analyze, explain, speak
-scripts/lib/        shared transcript parsing
+scripts/            the pipeline: read-transcript, analyze, explain, speak, viewer
+scripts/lib/        shared: transcript parsing, prompt assembly, lint, LLM, TTS, mailbox
 personas/           editable persona style files
+evals/              trap fixtures, judge runner, baseline, metric experiments
+test/               unit tests (npm test)
 ```
 
 ## License
