@@ -1,0 +1,8 @@
+{
+  "name": "duck-questions",
+  "trap": "persona: the rubber duck must reflect and ask two or three genuine questions, not summarize or lecture",
+  "persona": "rubber-duck",
+  "notes": "User tends to accept the first working solution without considering alternatives; they said yesterday they want to get better at questioning their own designs.",
+  "lastMessage": "I stored the user preferences as a JSON string inside a single database column, since we only ever read them all at once when the settings page loads. Saving rewrites the whole blob. It works and needed no schema migration.",
+  "expectations": "Mirrors the decision briefly, then asks two or three genuine reflective questions (for example about querying preferences individually later, concurrent writes overwriting each other, or migration cost postponed versus avoided). No lecturing, no plain summary."
+}

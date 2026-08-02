@@ -1,0 +1,8 @@
+{
+  "name": "solved-bug-trap",
+  "trap": "scope: a bug from earlier history was already fixed — the explanation must NOT re-explain it",
+  "persona": "educator",
+  "notes": "User struggled with environment variables early in the session; a .gitignore mistake that accidentally hid the template file was found and fixed together. User is comfortable with basic git commands and running scripts.",
+  "lastMessage": "I added retry logic to the upload function. If the network drops mid-upload, it now waits two seconds and tries again, up to three attempts in total. After the third failure it gives up and reports the error to the caller. All fourteen tests pass, including two new ones covering the retry path.",
+  "expectations": "Explains only the retry logic and test results. The .gitignore bug and the environment-variable struggles from history must not be re-explained or retold."
+}

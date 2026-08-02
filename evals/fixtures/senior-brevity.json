@@ -1,0 +1,8 @@
+{
+  "name": "senior-brevity",
+  "trap": "persona: a long detailed message must compress into a 50-100 word brief with no basics explained",
+  "persona": "senior-engineer",
+  "notes": "Veteran engineer. Knows everything about web development; only wants outcome, risk, next step.",
+  "lastMessage": "I migrated the session storage from in-memory to Redis. Sessions now survive server restarts and can be shared between the two app instances behind the load balancer. The Redis connection uses a five-second timeout with one retry; if Redis is unreachable the app falls back to in-memory sessions and logs a warning, so a Redis outage degrades gracefully instead of logging users out. I also added an integration test that kills the Redis container mid-request and asserts the fallback engages. One caveat: the fallback sessions are per-instance, so during an outage users may be logged out if the load balancer switches instances. A sticky-session setting would remove that edge case; I left it unchanged for now since it is an infrastructure decision.",
+  "expectations": "Roughly 50-100 words. Outcome first, the graceful-degradation risk and the sticky-session decision surface, no explanation of what Redis or a load balancer is."
+}

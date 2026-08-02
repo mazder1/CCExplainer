@@ -1,0 +1,8 @@
+{
+  "name": "code-heavy",
+  "trap": "ear-fitness: the message is full of paths, identifiers and symbols — the spoken explanation must contain none of them raw",
+  "persona": "educator",
+  "notes": "User is a beginner who listens to explanations while away from the screen, so anything that only makes sense visually is lost on them.",
+  "lastMessage": "Renamed `utils/helpers.js` to `utils/format.js` and split it: `formatDate()` and `formatBytes()` stay, while `deepClone()` moved to `utils/clone.js`. Updated 11 import statements across `src/**`. Also fixed the regex in `validateEmail()` — it was `/^\\S+@\\S+$/` and now requires a dot in the domain part. See https://github.com/example/repo/pull/42 for the diff.",
+  "expectations": "Files, functions and the regex change are described in natural speech (for example: the email checker now requires a dot in the domain). No backticks, no raw paths, no URL read aloud."
+}

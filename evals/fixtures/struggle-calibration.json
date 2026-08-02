@@ -1,0 +1,8 @@
+{
+  "name": "struggle-calibration",
+  "trap": "calibration: notes say the user finds promises/async hard and the message is about async — expect extra depth there, but the notes must never be mentioned",
+  "persona": "educator",
+  "notes": "User has repeatedly asked for re-explanations of asynchronous code: promises, await, and why code runs out of order. Evidence: three separate clarifying questions across the session. Handles file organization and git confidently. Prefers analogies.",
+  "lastMessage": "I changed the loader so the three data files are fetched concurrently instead of one after another. Promise.all starts all three requests at once and waits until every one of them has finished, then the parsing step runs on the combined results. Total load time dropped from about nine seconds to three.",
+  "expectations": "The concurrent-fetching idea gets a patient, possibly analogy-based explanation because the user finds async hard — but no phrase may reveal that notes or a profile exist."
+}

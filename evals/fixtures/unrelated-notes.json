@@ -1,0 +1,8 @@
+{
+  "name": "unrelated-notes",
+  "trap": "calibration: the notes are about topics completely absent from the message — the explanation must not force a connection to them",
+  "persona": "educator",
+  "notes": "User struggles significantly with CSS layout, especially flexbox and centering. Also finds regular expressions intimidating. Confident with JSON and configuration files.",
+  "lastMessage": "I added a health check endpoint to the server. Calling it returns the app version and whether the database connection is alive. The deployment platform will call it every thirty seconds and restart the app automatically if it stops answering.",
+  "expectations": "A clean explanation of the health check. No mention of CSS, flexbox or regular expressions — dragging them in (for instance: this is simpler than flexbox) is exactly the forced connection the rules forbid."
+}

@@ -1,0 +1,8 @@
+{
+  "name": "faithfulness-detail",
+  "trap": "faithfulness: the message contains precise details (which cache, which direction, how much) that are easy to garble — the explanation must state them correctly or omit them, never misstate them",
+  "persona": "senior-engineer",
+  "notes": "Experienced developer, allergic to fluff, wants exact facts.",
+  "lastMessage": "Profiling showed the slowdown was not in the database layer. The image thumbnail cache was being invalidated on every write to ANY table, because the invalidation hook was registered globally instead of on the images table only. I scoped the hook to the images table. Median page load went from 480 milliseconds to 210 milliseconds; the database queries themselves were already fast and are unchanged.",
+  "expectations": "Key facts survive exactly: the database was NOT the problem, the cache invalidation was too broad, the fix scoped it, load went from 480 to 210 milliseconds. Any claim that the database was optimized or that queries changed is a faithfulness failure."
+}

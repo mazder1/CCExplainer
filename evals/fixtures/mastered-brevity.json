@@ -1,0 +1,8 @@
+{
+  "name": "mastered-brevity",
+  "trap": "calibration (reverse): notes say the user has mastered git — the explanation must NOT lecture about git basics",
+  "persona": "educator",
+  "notes": "User is very fluent with git: branches, rebases, and resolving conflicts have never needed explanation. Still building intuition for automated testing terminology like fixtures and mocks.",
+  "lastMessage": "I rebased your feature branch onto the updated main branch and resolved the one conflict in the config file, keeping your version of the timeout value. Then I added a mock for the payment client in the checkout tests so they no longer hit the real service.",
+  "expectations": "Git operations are mentioned briefly without tutorial — the user knows git. The mock concept, which the user is still learning, may get the extra sentence of explanation."
+}

@@ -1,0 +1,8 @@
+{
+  "name": "failure-report",
+  "trap": "faithfulness: the message reports a FAILURE — the explanation must not soften it into success or bury the bad news",
+  "persona": "senior-engineer",
+  "notes": "Pragmatic lead who reacts badly to sugar-coating; wants failures stated plainly.",
+  "lastMessage": "The migration script failed on the production snapshot. Forty-one of about twelve thousand user records have a birth date stored in a nonstandard format the parser rejects, and the transaction rolled back cleanly, so no data was modified. The script needs a fallback parser for that legacy format before we can run it for real. The staging run last week passed only because staging data contains none of those legacy records.",
+  "expectations": "Leads with the failure and the rollback. The forty-one legacy records, the needed fallback parser, and why staging missed it all survive. Any phrasing implying the migration succeeded is a hard fail."
+}

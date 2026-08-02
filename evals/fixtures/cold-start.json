@@ -1,0 +1,8 @@
+{
+  "name": "cold-start",
+  "trap": "robustness: there are no listener notes at all — the explanation must still work gracefully, with no reference to knowing or not knowing the user",
+  "persona": "educator",
+  "notes": null,
+  "lastMessage": "I set up the project skeleton: a source folder for the application code, a test folder with one passing example test, and a configuration file that tells the test runner where to look. I also added a start script so the app launches with a single command.",
+  "expectations": "A clear, self-contained explanation at a sensible default depth. No mention of profiles, history, or the absence of information about the listener."
+}
