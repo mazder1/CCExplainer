@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { touchHeartbeat, clearHeartbeat, claimNextJob } from "./lib/mailbox.mjs";
 import { projectTranscriptDir, latestTranscript, readConversation, pickMessageToExplain } from "./lib/transcript.mjs";
-import { getListenerNotes } from "./analyze.mjs";
+import { getListenerNotes, refreshNotesInBackground } from "./analyze.mjs";
 import { generateExplanation } from "./lib/explainer.mjs";
 import { synthesizeWithTimings } from "./lib/tts.mjs";
 
@@ -100,8 +100,10 @@ async function narrate() {
     if (!msg) throw new Error(`no assistant message at offset ${currentOffset}`);
     let notes = null;
     try {
-      generating = "updating listener notes…";
-      notes = (await getListenerNotes(transcriptPath, {})).notes;
+      generating = "loading listener notes…";
+      const result = await getListenerNotes(transcriptPath, { allowStale: true });
+      notes = result.notes;
+      if (result.stale) refreshNotesInBackground(transcriptPath); // fresh for next time
     } catch {} // notes are optional — proceed uncalibrated rather than fail
     generating = `writing the script (${currentPersona})…`;
     const gen = await generateExplanation({ personaName: currentPersona, notes, lastMessageText: msg.text });

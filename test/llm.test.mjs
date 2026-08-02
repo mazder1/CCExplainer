@@ -74,7 +74,7 @@ test("chat sends the standard request shape and returns trimmed text + usage", a
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://api.openai.com/v1/chat/completions");
   assert.equal(calls[0].opts.headers.Authorization, "Bearer sk-test");
-  assert.deepEqual(JSON.parse(calls[0].opts.body), { model: "gpt-5-mini", messages });
+  assert.deepEqual(JSON.parse(calls[0].opts.body), { model: "gpt-5-mini", messages, reasoning_effort: "low" });
 });
 
 test("chat surfaces provider errors with host and status", async () => {

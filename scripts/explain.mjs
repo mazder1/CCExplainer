@@ -15,7 +15,7 @@ import {
   readConversation,
   pickMessageToExplain,
 } from "./lib/transcript.mjs";
-import { getListenerNotes } from "./analyze.mjs";
+import { getListenerNotes, refreshNotesInBackground } from "./analyze.mjs";
 import { llmConfig } from "./lib/llm.mjs";
 import { generateExplanation } from "./lib/explainer.mjs";
 
@@ -50,12 +50,21 @@ if (!lastMessage) {
   process.exit(1);
 }
 
-// The lens: listener notes from the history (cached; see analyze.mjs).
+// The lens: listener notes — served from cache instantly even when stale
+// (narration never waits for a history re-analysis); a background refresh
+// keeps the cache good for next time.
 let notes = null;
 if (useNotes) {
-  const result = await getListenerNotes(transcriptPath, { model: modelId });
+  const tNotes = Date.now();
+  const result = await getListenerNotes(transcriptPath, { model: modelId, allowStale: true });
   notes = result.notes;
-  console.error(`Listener notes ${result.fromCache ? "loaded from cache" : "freshly analyzed"}.`);
+  if (result.stale) refreshNotesInBackground(transcriptPath);
+  const label = result.stale
+    ? "from cache (stale — refreshing in background)"
+    : result.fromCache
+      ? "from cache"
+      : "freshly analyzed";
+  console.error(`Listener notes ${label} — ${((Date.now() - tNotes) / 1000).toFixed(1)}s`);
 }
 
 console.error(`Explaining the last message (${lastMessage.text.length} chars) as "${personaName}" via ${modelId}...\n`);
@@ -63,13 +72,16 @@ console.error(`Explaining the last message (${lastMessage.text.length} chars) as
 // Generation, linting and the one-shot retry all live in the shared
 // explainer library — the same code path the eval harness measures.
 let result;
+const tGen = Date.now();
 try {
   result = await generateExplanation({ personaName, notes, lastMessageText: lastMessage.text, model: modelId });
-  if (result.retried) console.error("(first draft broke mechanical rules — retried once)");
 } catch (err) {
   console.error(err.message);
   process.exit(1);
 }
+console.error(
+  `Script written in ${((Date.now() - tGen) / 1000).toFixed(1)}s${result.retried ? " (incl. one lint retry)" : ""}`,
+);
 
 console.log(result.text);
 if (result.usage) {

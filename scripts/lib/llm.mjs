@@ -34,10 +34,21 @@ export async function chat(messages, { model, baseUrl, apiKey } = {}) {
         "another provider, set LLM_BASE_URL + LLM_API_KEY + LLM_MODEL (see .env.example).",
     );
   }
+  const body = { model: cfg.model, messages };
+  // gpt-5 family models are "reasoning" models that think hard by default —
+  // 20+ seconds even for simple tasks. Our tasks (explain, analyze, judge)
+  // are not proofs, so default to low effort for latency. Override with
+  // LLM_REASONING_EFFORT (minimal|low|medium|high, or "default" to omit).
+  // Only sent to OpenAI itself: other OpenAI-compatible providers may
+  // reject parameters they do not know.
+  const effort = process.env.LLM_REASONING_EFFORT ?? "low";
+  if (effort !== "default" && cfg.baseUrl.includes("api.openai.com") && cfg.model.startsWith("gpt-5")) {
+    body.reasoning_effort = effort;
+  }
   const response = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: cfg.model, messages }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(

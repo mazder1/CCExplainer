@@ -89,12 +89,14 @@ const modelId = flag("model", "eleven_multilingual_v2");
 console.log(`Speaking ${text.length} characters with voice ${voiceId}, speed ${speed}, model ${modelId}...`);
 
 let audio, words, duration;
+const tSynth = Date.now();
 try {
   ({ audio, words, duration } = await synthesizeWithTimings(text, { apiKey, voiceId, modelId, speed }));
 } catch (err) {
   console.error(err.message);
   process.exit(1);
 }
+console.log(`Synthesized in ${((Date.now() - tSynth) / 1000).toFixed(1)}s`);
 
 // The karaoke viewer opens ON ITS OWN when possible: if none is running and
 // we are inside Windows Terminal, ask it to split the current window and
