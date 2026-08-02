@@ -18,8 +18,16 @@ export function llmConfig() {
   return { baseUrl, apiKey, model };
 }
 
-export async function chat(messages, { model } = {}) {
-  const cfg = llmConfig();
+// Optional overrides (model, baseUrl, apiKey) let a caller talk to a
+// DIFFERENT provider than the default — the eval judge uses this so it can
+// be a different model family than the writer it grades.
+export async function chat(messages, { model, baseUrl, apiKey } = {}) {
+  const defaults = llmConfig();
+  const cfg = {
+    baseUrl: (baseUrl ?? defaults.baseUrl).replace(/\/+$/, ""),
+    apiKey: apiKey ?? defaults.apiKey,
+    model: model ?? defaults.model,
+  };
   if (!cfg.apiKey) {
     throw new Error(
       "No language-model API key found. Set OPENAI_API_KEY in .env — or, for " +
@@ -29,7 +37,7 @@ export async function chat(messages, { model } = {}) {
   const response = await fetch(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: model ?? cfg.model, messages }),
+    body: JSON.stringify({ model: cfg.model, messages }),
   });
   if (!response.ok) {
     throw new Error(

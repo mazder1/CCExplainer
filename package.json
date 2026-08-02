@@ -9,6 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "eval": "node evals/run.mjs"
   }
 }
