@@ -75,6 +75,8 @@ node scripts/explain.mjs | node scripts/speak.mjs -   # the whole pipeline, pipe
 
 Useful flags: `--persona <name>`, `--speed 0.7..1.2`, `--voice <elevenlabs-voice-id>`, `--model` (defaults: `eleven_multilingual_v2` for speech — chosen by ear over the faster `eleven_flash_v2_5` — and `gpt-5-mini` for text), `--keep` to keep the MP3, `--no-notes` to skip calibration.
 
+**Bring your own model:** the brain speaks the standard chat-completions dialect, so any OpenAI-compatible provider works — Kimi, DeepSeek, Groq, Anthropic's compatibility endpoint, or a free local model via Ollama. Set `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL` in `.env`; ready-made recipes are in [.env.example](.env.example).
+
 ## Roadmap
 
 - **Karaoke viewer** (next): a companion terminal pane that shows the explanation text and highlights each sentence as the voice speaks it, using ElevenLabs per-character timestamps — so ear and eye never desync. Playback keys (J/K/L) live here too.

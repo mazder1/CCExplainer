@@ -17,6 +17,7 @@ import {
   readConversation,
   conversationAsText,
 } from "./lib/transcript.mjs";
+import { chat } from "./lib/llm.mjs";
 
 const CACHE_DIR = ".ccexplainer";
 const CACHE_FILE = join(CACHE_DIR, "listener-notes.json");
@@ -36,7 +37,7 @@ explain future messages to this user at the right depth. Cover:
 Be concrete and honest. Plain text, at most 150 words. If the conversation
 is too short to tell, say so briefly.`;
 
-export async function getListenerNotes(transcriptPath, apiKey, { force = false, model = "gpt-5-mini" } = {}) {
+export async function getListenerNotes(transcriptPath, { force = false, model } = {}) {
   const turns = readConversation(transcriptPath);
   const conversation = conversationAsText(turns);
 
@@ -56,22 +57,13 @@ export async function getListenerNotes(transcriptPath, apiKey, { force = false, 
     ? conversation.slice(-60000)
     : conversation;
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: ANALYST_PROMPT },
-        { role: "user", content: material },
-      ],
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`OpenAI answered ${response.status}: ${await response.text()}`);
-  }
-  const data = await response.json();
-  const notes = data.choices[0].message.content.trim();
+  const { text: notes } = await chat(
+    [
+      { role: "system", content: ANALYST_PROMPT },
+      { role: "user", content: material },
+    ],
+    { model },
+  );
 
   mkdirSync(CACHE_DIR, { recursive: true });
   writeFileSync(
@@ -86,15 +78,17 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "
   try {
     process.loadEnvFile();
   } catch {}
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.error("Missing OPENAI_API_KEY — add it to your .env file.");
-    process.exit(1);
-  }
   const force = process.argv.includes("--refresh");
   const transcriptPath = process.argv.find((a) => a.endsWith(".jsonl")) ??
     latestTranscript(projectTranscriptDir(process.cwd()));
-  const { notes, fromCache } = await getListenerNotes(transcriptPath, apiKey, { force });
+  let result;
+  try {
+    result = await getListenerNotes(transcriptPath, { force });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+  const { notes, fromCache } = result;
   console.error(fromCache ? "(from cache)\n" : "(freshly analyzed)\n");
   console.log(notes);
 }

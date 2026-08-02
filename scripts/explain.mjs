@@ -17,15 +17,11 @@ import {
   readConversation,
 } from "./lib/transcript.mjs";
 import { getListenerNotes } from "./analyze.mjs";
+import { chat, llmConfig } from "./lib/llm.mjs";
 
 try {
   process.loadEnvFile();
 } catch {}
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) {
-  console.error("Missing OPENAI_API_KEY — add it to your .env file.");
-  process.exit(1);
-}
 
 const args = process.argv.slice(2);
 function flag(name, fallback) {
@@ -33,7 +29,7 @@ function flag(name, fallback) {
   return i !== -1 && args[i + 1] ? args[i + 1] : fallback;
 }
 const personaName = flag("persona", "educator");
-const modelId = flag("model", "gpt-5-mini");
+const modelId = flag("model", llmConfig().model);
 const useNotes = !args.includes("--no-notes");
 const live = args.includes("--live");
 const transcriptArg = args.find((a) => a.endsWith(".jsonl"));
@@ -63,7 +59,7 @@ if (!lastMessage) {
 // The lens: listener notes from the history (cached; see analyze.mjs).
 let notes = null;
 if (useNotes) {
-  const result = await getListenerNotes(transcriptPath, apiKey, { model: modelId });
+  const result = await getListenerNotes(transcriptPath, { model: modelId });
   notes = result.notes;
   console.error(`Listener notes ${result.fromCache ? "loaded from cache" : "freshly analyzed"}.`);
 }
@@ -101,12 +97,10 @@ Hard rules:
 
 console.error(`Explaining the last message (${lastMessage.text.length} chars) as "${personaName}" via ${modelId}...\n`);
 
-const response = await fetch("https://api.openai.com/v1/chat/completions", {
-  method: "POST",
-  headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-  body: JSON.stringify({
-    model: modelId,
-    messages: [
+let result;
+try {
+  result = await chat(
+    [
       { role: "system", content: TASK_RULES + "\n\nDelivery style:\n" + persona },
       {
         role: "user",
@@ -115,16 +109,14 @@ const response = await fetch("https://api.openai.com/v1/chat/completions", {
           `LATEST MESSAGE to explain:\n${lastMessage.text}`,
       },
     ],
-  }),
-});
-
-if (!response.ok) {
-  console.error(`OpenAI answered ${response.status} ${response.statusText}:\n${await response.text()}`);
+    { model: modelId },
+  );
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 
-const data = await response.json();
-console.log(data.choices[0].message.content.trim());
-if (data.usage) {
-  console.error(`\n(tokens: ${data.usage.prompt_tokens} in, ${data.usage.completion_tokens} out)`);
+console.log(result.text);
+if (result.usage) {
+  console.error(`\n(tokens: ${result.usage.prompt_tokens} in, ${result.usage.completion_tokens} out)`);
 }
