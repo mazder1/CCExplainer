@@ -14,6 +14,8 @@ import { writeFileSync, mkdirSync, unlinkSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { synthesizeWithTimings } from "./lib/tts.mjs";
+import { viewerAlive, writeJob } from "./lib/mailbox.mjs";
 
 // ---------------------------------------------------------------------------
 // Step 1: load the secret.
@@ -79,41 +81,26 @@ const speed = parseFloat(flag("speed", "1.0"));
 const modelId = flag("model", "eleven_multilingual_v2");
 
 // ---------------------------------------------------------------------------
-// Step 3: call the API.
-//
-// The "order through the service window": an HTTPS POST to ElevenLabs'
-// text-to-speech endpoint. The voice is part of the address; the text and
-// settings travel in the JSON body; the API key rides in the 'xi-api-key'
-// header. What comes back is not JSON — it is raw MP3 bytes.
+// Step 3: synthesize — WITH word timings (since Wave 6, via the shared tts
+// lib). The timings cost nothing extra and make karaoke playback possible.
 // ---------------------------------------------------------------------------
-
-const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`;
 
 console.log(`Speaking ${text.length} characters with voice ${voiceId}, speed ${speed}, model ${modelId}...`);
 
-const response = await fetch(url, {
-  method: "POST",
-  headers: {
-    "xi-api-key": apiKey,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    text,
-    model_id: modelId,
-    voice_settings: {
-      speed, // 0.7 (slow) .. 1.2 (fast) — the voice actually speaks differently
-      stability: 0.5, // lower = more expressive variation, higher = more monotone
-      similarity_boost: 0.75, // how closely to stick to the original voice character
-    },
-  }),
-});
-
-if (!response.ok) {
-  // Readable errors beat mysterious ones — 401 means bad/missing key,
-  // 422 usually means a bad parameter (e.g. speed out of range).
-  const detail = await response.text();
-  console.error(`ElevenLabs answered ${response.status} ${response.statusText}:\n${detail}`);
+let audio, words, duration;
+try {
+  ({ audio, words, duration } = await synthesizeWithTimings(text, { apiKey, voiceId, modelId, speed }));
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
+}
+
+// If the karaoke viewer is running (fresh heartbeat), hand the speech to it
+// — it plays the audio AND highlights each word as it is spoken.
+if (viewerAlive()) {
+  writeJob({ createdAt: new Date().toISOString(), text, words, duration, audioBase64: audio.toString("base64") });
+  console.log("Karaoke viewer detected — speaking there.");
+  process.exit(0);
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +113,6 @@ if (!response.ok) {
 // ---------------------------------------------------------------------------
 
 const keep = args.includes("--keep");
-const audio = Buffer.from(await response.arrayBuffer());
 let outPath;
 if (keep) {
   mkdirSync("output", { recursive: true });

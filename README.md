@@ -73,6 +73,8 @@ node scripts/analyze.mjs              # see your own listener notes
 node scripts/explain.mjs              # explanation of the last message (text)
 node scripts/speak.mjs "Hello there"  # just the voice
 node scripts/explain.mjs | node scripts/speak.mjs -   # the whole pipeline, piped
+node scripts/viewer.mjs               # karaoke viewer: run in a 2nd terminal pane —
+                                      # /speak then highlights each word as it is spoken
 ```
 
 Useful flags: `--persona <name>`, `--speed 0.7..1.2`, `--voice <elevenlabs-voice-id>`, `--model` (defaults: `eleven_multilingual_v2` for speech — chosen by ear over the faster `eleven_flash_v2_5` — and `gpt-5-mini` for text), `--keep` to keep the MP3, `--no-notes` to skip calibration.
