@@ -105,12 +105,31 @@ writeFileSync(outPath, audio);
 console.log(`Saved ${(audio.length / 1024).toFixed(0)} KB to ${outPath}`);
 
 // ---------------------------------------------------------------------------
-// Step 5: ...and play it with the system's default audio player.
+// Step 5: ...and play it silently in the background — no window, no player app.
+//
+// On Windows we hand the file to a hidden PowerShell process that uses the
+// OS's built-in audio engine (System.Windows.Media.MediaPlayer). It has no
+// user interface at all: it plays, waits for the end, and exits.
 // ---------------------------------------------------------------------------
 
 if (process.platform === "win32") {
-  execFile("cmd", ["/c", "start", "", outPath]);
+  const psScript = [
+    "Add-Type -AssemblyName PresentationCore",
+    "$p = New-Object System.Windows.Media.MediaPlayer",
+    `$p.Open([Uri](Resolve-Path '${outPath}').Path)`,
+    "$p.Play()",
+    // Wait until Windows has read the file's duration, then sleep through playback.
+    "while (-not $p.NaturalDuration.HasTimeSpan) { Start-Sleep -Milliseconds 100 }",
+    "Start-Sleep -Milliseconds ($p.NaturalDuration.TimeSpan.TotalMilliseconds + 300)",
+    "$p.Close()",
+  ].join("; ");
+  execFile(
+    "powershell",
+    ["-NoProfile", "-WindowStyle", "Hidden", "-Command", psScript],
+    { windowsHide: true },
+  );
 } else {
-  execFile(process.platform === "darwin" ? "open" : "xdg-open", [outPath]);
+  // macOS/Linux: afplay/mpg123 are terminal-only players — also windowless.
+  execFile(process.platform === "darwin" ? "afplay" : "mpg123", [outPath]);
 }
-console.log("Playing.");
+console.log("Playing in the background (no window will open).");
