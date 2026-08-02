@@ -1,12 +1,16 @@
-// Wave 6c — the real karaoke viewer.
+// Wave 6c/6d — the karaoke viewer.
 //
-// Run it in a second terminal pane, FROM THE PROJECT ROOT:
+// Opens automatically on /speak (or run it yourself, from the project root):
 //
 //   node scripts/viewer.mjs
 //
-// It idles until /speak (or `... | node scripts/speak.mjs -`) drops a job in
-// the mailbox, then plays the audio and highlights each word as the voice
-// speaks it. Keys: [s] skip current speech, [q] quit.
+// It idles until the pipeline drops a job in the mailbox, then plays the
+// audio and highlights each word as the voice speaks it.
+//
+// Keys (YouTube-style):
+//   [k] pause / resume      [j] back 5s        [l] forward 5s
+//   [0] restart speech      [s] skip/dismiss   [q] quit
+// After a speech ends the text stays on screen — [r] replays it.
 
 import { writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -29,18 +33,34 @@ if (!process.stdout.isTTY) {
 }
 
 // ---------------------------------------------------------------------------
-// State: either idle (watching the mailbox) or speaking one job.
+// State. mode is one of: "idle" (watching the mailbox), "playing", "done"
+// (speech finished, text kept on screen for replay).
+//
+// The clock is SEEK-AWARE: elapsed = clockOffset + time since startedAt,
+// frozen while paused. Every pause/resume/jump updates the pair so the
+// highlight always agrees with what the ear hears.
 // ---------------------------------------------------------------------------
 
-let job = null; // the job being spoken, or null when idle
-let startedAt = 0; // wall-clock ms when audio actually began
-let player = null; // child process playing the audio
-let audioPath = null; // temp file the player reads
+let mode = "idle";
+let job = null;
+let player = null;
+let audioPath = null;
+let startedAt = 0; // wall-clock ms of the last play/resume/seek
+let clockOffset = 0; // seconds of speech already "on the clock" at startedAt
+let paused = false;
 let pollCountdown = 0;
+
+function elapsed() {
+  return paused ? clockOffset : clockOffset + (Date.now() - startedAt) / 1000;
+}
 
 function width() {
   return Math.min(process.stdout.columns ?? 80, 72);
 }
+
+// ---------------------------------------------------------------------------
+// Rendering — one frame per state, drawn fresh every tick.
+// ---------------------------------------------------------------------------
 
 function renderIdle() {
   let frame = HOME_AND_CLEAR;
@@ -51,44 +71,61 @@ function renderIdle() {
   process.stdout.write(frame);
 }
 
-function renderKaraoke(elapsed) {
+function renderWords(t) {
   const w = width();
-  let frame = HOME_AND_CLEAR;
-  frame += `CCExplainer viewer — speaking (${job.duration.toFixed(1)}s)\n`;
-  frame += `${"─".repeat(w)}\n\n`;
+  let out = "";
   let lineLen = 0;
   for (const word of job.words) {
     if (lineLen + word.text.length + 1 > w) {
-      frame += "\n";
+      out += "\n";
       lineLen = 0;
     }
-    if (elapsed >= word.start && elapsed < word.end) frame += HIGHLIGHT + word.text + RESET;
-    else if (elapsed >= word.end) frame += word.text;
-    else frame += DIM + word.text + RESET;
-    frame += " ";
+    if (t >= word.start && t < word.end) out += HIGHLIGHT + word.text + RESET;
+    else if (t >= word.end) out += word.text;
+    else out += DIM + word.text + RESET;
+    out += " ";
     lineLen += word.text.length + 1;
   }
-  frame += `\n\n${"─".repeat(w)}\n`;
-  frame += `${elapsed.toFixed(1)}s / ${job.duration.toFixed(1)}s   [s] skip  [q] quit\n`;
+  return out;
+}
+
+function renderPlaying() {
+  const t = elapsed();
+  let frame = HOME_AND_CLEAR;
+  frame += `CCExplainer viewer — ${paused ? "⏸ paused" : "speaking"}\n`;
+  frame += `${"─".repeat(width())}\n\n`;
+  frame += renderWords(t);
+  frame += `\n\n${"─".repeat(width())}\n`;
+  frame += `${t.toFixed(1)}s / ${job.duration.toFixed(1)}s   [k] ${paused ? "resume" : "pause"}  [j] -5s  [l] +5s  [0] restart  [s] skip  [q] quit\n`;
+  process.stdout.write(frame);
+}
+
+function renderDone() {
+  let frame = HOME_AND_CLEAR;
+  frame += "CCExplainer viewer — finished\n";
+  frame += `${"─".repeat(width())}\n\n`;
+  frame += renderWords(Infinity); // everything "already spoken": plain text
+  frame += `\n\n${"─".repeat(width())}\n[r] replay  [s] dismiss  [q] quit\n`;
   process.stdout.write(frame);
 }
 
 // ---------------------------------------------------------------------------
-// Audio playback — same hidden-player technique as speak.mjs, with one
-// addition: the player prints START the instant playback truly begins, and
-// THAT is when we start the karaoke clock. Spawning a process takes a
-// human-noticeable moment; syncing to START instead of to spawn time is
-// what keeps the first words aligned.
+// The audio player — a hidden PowerShell process we now COMMAND over stdin:
+// PAUSE / PLAY / SEEK <ms>. It prints START the instant audio truly begins,
+// which is when the karaoke clock starts. (On macOS/Linux the fallback
+// players cannot seek — playback works, J/K/L quietly do not.)
 // ---------------------------------------------------------------------------
 
 function startJob(nextJob) {
   job = nextJob;
+  mode = "playing";
+  paused = false;
+  clockOffset = 0;
+  startedAt = Date.now(); // provisional; corrected by START
   audioPath = join(tmpdir(), `ccexplainer-viewer-${Date.now()}.mp3`);
   writeFileSync(audioPath, Buffer.from(job.audioBase64, "base64"));
-  startedAt = Date.now(); // provisional; corrected by START below
 
   if (process.platform === "win32") {
-    const durMs = Math.ceil((job.duration + 0.6) * 1000);
     const psScript = [
       "Add-Type -AssemblyName PresentationCore",
       "$p = New-Object System.Windows.Media.MediaPlayer",
@@ -96,7 +133,7 @@ function startJob(nextJob) {
       "$p.Play()",
       "while (-not $p.NaturalDuration.HasTimeSpan) { Start-Sleep -Milliseconds 50 }",
       "[Console]::Out.WriteLine('START')",
-      `Start-Sleep -Milliseconds ${durMs}`,
+      "while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; $parts = $line.Split(' '); if ($parts[0] -eq 'PAUSE') { $p.Pause() } elseif ($parts[0] -eq 'PLAY') { $p.Play() } elseif ($parts[0] -eq 'SEEK') { $p.Position = [TimeSpan]::FromMilliseconds([int]$parts[1]) } }",
       "$p.Close()",
     ].join("; ");
     player = execFile("powershell", ["-NoProfile", "-Command", psScript], { windowsHide: true });
@@ -105,7 +142,6 @@ function startJob(nextJob) {
     });
   } else {
     player = execFile(process.platform === "darwin" ? "afplay" : "mpg123", [audioPath]);
-    startedAt = Date.now();
   }
   player.on("exit", () => {
     try {
@@ -114,20 +150,62 @@ function startJob(nextJob) {
   });
 }
 
-function stopJob() {
-  if (player && player.exitCode === null) player.kill();
+function commandPlayer(line) {
+  if (player?.stdin?.writable) player.stdin.write(line + "\n");
+}
+
+function stopPlayer() {
+  if (player) {
+    try {
+      player.stdin?.end(); // polite: lets the player Close() cleanly
+    } catch {}
+    if (player.exitCode === null) player.kill();
+  }
   player = null;
-  job = null;
 }
 
 // ---------------------------------------------------------------------------
-// Lifecycle: alternate screen, heartbeat, keys, the loop, clean exit.
+// The controls — each one updates the player AND the clock together.
+// ---------------------------------------------------------------------------
+
+function togglePause() {
+  if (paused) {
+    startedAt = Date.now();
+    paused = false;
+    commandPlayer("PLAY");
+  } else {
+    clockOffset = elapsed();
+    paused = true;
+    commandPlayer("PAUSE");
+  }
+}
+
+function seekTo(seconds) {
+  const t = Math.min(Math.max(seconds, 0), Math.max(job.duration - 0.05, 0));
+  commandPlayer(`SEEK ${Math.round(t * 1000)}`);
+  clockOffset = t;
+  startedAt = Date.now();
+}
+
+function finishJob() {
+  stopPlayer();
+  mode = "done"; // keep the text on screen — the user may want to re-read or replay
+}
+
+function dismissJob() {
+  stopPlayer();
+  job = null;
+  mode = "idle";
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle.
 // ---------------------------------------------------------------------------
 
 function cleanupAndExit() {
   clearInterval(loop);
   clearInterval(heartbeat);
-  stopJob();
+  stopPlayer();
   clearHeartbeat();
   process.stdout.write(RESET + CURSOR_SHOW + ALT_SCREEN_OFF);
   process.exit(0);
@@ -139,26 +217,37 @@ process.stdin.resume();
 process.stdin.on("data", (key) => {
   const k = key.toString();
   if (k === "q" || k === "\x03") cleanupAndExit();
-  if (k === "s" && job) stopJob();
+  if (mode === "playing") {
+    if (k === "k") togglePause();
+    if (k === "j") seekTo(elapsed() - 5);
+    if (k === "l") seekTo(elapsed() + 5);
+    if (k === "0") seekTo(0);
+    if (k === "s") dismissJob();
+  } else if (mode === "done") {
+    if (k === "r") startJob(job);
+    if (k === "s") dismissJob();
+  }
 });
 
 touchHeartbeat();
 const heartbeat = setInterval(touchHeartbeat, 2000);
 
 const loop = setInterval(() => {
-  if (job) {
-    const elapsed = (Date.now() - startedAt) / 1000;
-    renderKaraoke(elapsed);
-    if (elapsed > job.duration + 0.5) stopJob();
+  if (mode === "playing") {
+    renderPlaying();
+    if (!paused && elapsed() > job.duration + 0.5) finishJob();
   } else {
+    // idle and done both keep watching the mailbox for the next speech
     if (--pollCountdown <= 0) {
-      pollCountdown = 5; // check the mailbox roughly 3x per second
+      pollCountdown = 5;
       const next = claimNextJob();
       if (next) {
+        stopPlayer();
         startJob(next);
         return;
       }
     }
-    renderIdle();
+    if (mode === "done") renderDone();
+    else renderIdle();
   }
 }, 60);
