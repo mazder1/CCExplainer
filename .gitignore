@@ -7,5 +7,6 @@ dist/
 *.mp3
 *.wav
 output/
+.ccexplainer/
 .DS_Store
 Thumbs.db
