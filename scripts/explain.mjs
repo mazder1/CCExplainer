@@ -8,9 +8,6 @@
 //   node scripts/explain.mjs --persona senior-engineer
 //   node scripts/explain.mjs --no-notes                 -> skip the analyzer (faster, generic)
 
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   projectTranscriptDir,
   latestTranscript,
@@ -19,6 +16,7 @@ import {
 } from "./lib/transcript.mjs";
 import { getListenerNotes } from "./analyze.mjs";
 import { chat, llmConfig } from "./lib/llm.mjs";
+import { loadPersona, buildExplainerMessages } from "./lib/explainer.mjs";
 
 try {
   process.loadEnvFile();
@@ -53,53 +51,22 @@ if (useNotes) {
   console.error(`Listener notes ${result.fromCache ? "loaded from cache" : "freshly analyzed"}.`);
 }
 
-// The style: persona file = delivery style only (the task rules live below).
-const personaDir = join(dirname(fileURLToPath(import.meta.url)), "..", "personas");
-let persona;
+// The style + the prompt — both now come from the shared explainer library,
+// the same code path the eval harness uses.
+let messages;
 try {
-  persona = readFileSync(join(personaDir, `${personaName}.md`), "utf8");
-} catch {
-  console.error(`Unknown persona "${personaName}". Available: educator, senior-engineer, rubber-duck`);
+  const persona = loadPersona(personaName);
+  messages = buildExplainerMessages({ persona, notes, lastMessageText: lastMessage.text });
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
-
-// The task rules — fixed for every persona. This is where the user's design
-// decisions are enforced: explain ONLY the last message; notes are context,
-// never content; past problems are not re-explained.
-const TASK_RULES = `You explain the LATEST MESSAGE from an AI coding assistant
-to the human user it was written for. Your text will be read aloud by a
-text-to-speech voice.
-
-Hard rules:
-- Explain ONLY the latest message below. It is your entire subject.
-- You also receive LISTENER NOTES describing this user's past struggles and
-  strengths. Use them ONLY to calibrate: go deeper and slower on things the
-  notes say the user finds hard, stay brief on what they know well.
-- Do NOT re-explain problems or topics from earlier in the conversation —
-  they were already explained when they happened. At most, when the latest
-  message genuinely relates to something the user saw before, you may draw
-  the connection in passing ("this works like..."). Never force it.
-- Never mention that listener notes exist. Never say "according to your
-  profile" or similar. The calibration must be invisible.
-- Written for the ear: no markdown, no lists, no symbols, no code. Short
-  spoken sentences. Say names of files and commands naturally.`;
 
 console.error(`Explaining the last message (${lastMessage.text.length} chars) as "${personaName}" via ${modelId}...\n`);
 
 let result;
 try {
-  result = await chat(
-    [
-      { role: "system", content: TASK_RULES + "\n\nDelivery style:\n" + persona },
-      {
-        role: "user",
-        content:
-          (notes ? `LISTENER NOTES (context only, never mention them):\n${notes}\n\n` : "") +
-          `LATEST MESSAGE to explain:\n${lastMessage.text}`,
-      },
-    ],
-    { model: modelId },
-  );
+  result = await chat(messages, { model: modelId });
 } catch (err) {
   console.error(err.message);
   process.exit(1);
