@@ -42,7 +42,7 @@ const CURSOR_HIDE = "\x1b[?25l";
 const CURSOR_SHOW = "\x1b[?25h";
 const HOME_AND_CLEAR = "\x1b[H\x1b[2J"; // cursor to top-left, wipe screen
 const DIM = "\x1b[2m"; // upcoming words: faint
-const HIGHLIGHT = "\x1b[7m"; // current word: inverted colors
+const HIGHLIGHT = "\x1b[1m"; // current word: bold/bright (font-only highlight, no background change)
 const RESET = "\x1b[0m";
 
 // ---------------------------------------------------------------------------

@@ -24,7 +24,7 @@ const CURSOR_HIDE = "\x1b[?25l";
 const CURSOR_SHOW = "\x1b[?25h";
 const HOME_AND_CLEAR = "\x1b[H\x1b[2J";
 const DIM = "\x1b[2m";
-const HIGHLIGHT = "\x1b[7m";
+const HIGHLIGHT = "\x1b[1m"; // bold/bright — single-layer highlight: font only, background untouched
 const RESET = "\x1b[0m";
 
 if (!process.stdout.isTTY) {
