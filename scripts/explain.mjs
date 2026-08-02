@@ -15,8 +15,8 @@ import {
   pickMessageToExplain,
 } from "./lib/transcript.mjs";
 import { getListenerNotes } from "./analyze.mjs";
-import { chat, llmConfig } from "./lib/llm.mjs";
-import { loadPersona, buildExplainerMessages } from "./lib/explainer.mjs";
+import { llmConfig } from "./lib/llm.mjs";
+import { generateExplanation } from "./lib/explainer.mjs";
 
 try {
   process.loadEnvFile();
@@ -51,22 +51,14 @@ if (useNotes) {
   console.error(`Listener notes ${result.fromCache ? "loaded from cache" : "freshly analyzed"}.`);
 }
 
-// The style + the prompt — both now come from the shared explainer library,
-// the same code path the eval harness uses.
-let messages;
-try {
-  const persona = loadPersona(personaName);
-  messages = buildExplainerMessages({ persona, notes, lastMessageText: lastMessage.text });
-} catch (err) {
-  console.error(err.message);
-  process.exit(1);
-}
-
 console.error(`Explaining the last message (${lastMessage.text.length} chars) as "${personaName}" via ${modelId}...\n`);
 
+// Generation, linting and the one-shot retry all live in the shared
+// explainer library — the same code path the eval harness measures.
 let result;
 try {
-  result = await chat(messages, { model: modelId });
+  result = await generateExplanation({ personaName, notes, lastMessageText: lastMessage.text, model: modelId });
+  if (result.retried) console.error("(first draft broke mechanical rules — retried once)");
 } catch (err) {
   console.error(err.message);
   process.exit(1);

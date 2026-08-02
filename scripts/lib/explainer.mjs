@@ -8,6 +8,8 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { chat } from "./llm.mjs";
+import { lintExplanation } from "./lint.mjs";
 
 export const PERSONA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "personas");
 
@@ -22,7 +24,8 @@ Hard rules:
 - Explain ONLY the latest message below. It is your entire subject.
 - You also receive LISTENER NOTES describing this user's past struggles and
   strengths. Use them ONLY to calibrate: go deeper and slower on things the
-  notes say the user finds hard, stay brief on what they know well.
+  notes say the user finds hard. Topics the notes mark as mastered get NAMED
+  but NOT explained — not even one defining sentence.
 - Do NOT re-explain problems or topics from earlier in the conversation —
   they were already explained when they happened. At most, when the latest
   message genuinely relates to something the user saw before, you may draw
@@ -60,4 +63,34 @@ export function buildExplainerMessages({ persona, notes = null, lastMessageText 
         `LATEST MESSAGE to explain:\n${lastMessageText}`,
     },
   ];
+}
+
+// The full production generation path: build prompt, generate, lint — and if
+// the mechanical rules were broken, retry ONCE with the violations quoted
+// back. Models fix a named violation far more reliably than they avoid it.
+// Both explain.mjs and the eval runner call THIS, so evals measure exactly
+// what production ships, retry included.
+export async function generateExplanation({ personaName, notes = null, lastMessageText, model } = {}) {
+  const persona = loadPersona(personaName);
+  const messages = buildExplainerMessages({ persona, notes, lastMessageText });
+  let result = await chat(messages, { model });
+  let lint = lintExplanation(result.text, { persona: personaName });
+  let retried = false;
+  if (!lint.ok) {
+    retried = true;
+    const violationList = lint.violations.map((v) => `${v.rule} (${v.detail})`).join("; ");
+    result = await chat(
+      [
+        ...messages,
+        { role: "assistant", content: result.text },
+        {
+          role: "user",
+          content: `Your explanation broke these mechanical rules: ${violationList}. Rewrite the SAME explanation with every violation fixed. Keep the content; correct the form. Output only the rewritten explanation.`,
+        },
+      ],
+      { model },
+    );
+    lint = lintExplanation(result.text, { persona: personaName });
+  }
+  return { text: result.text, usage: result.usage, lint, retried };
 }

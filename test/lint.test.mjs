@@ -32,11 +32,14 @@ test("mentioning the notes is caught (calibration must be invisible)", () => {
   assert.ok(rules("The Listener Notes say you know git well.").includes("mentions-notes"));
 });
 
-test("unspeakable tokens are caught: UUIDs, URLs, paths, hex", () => {
+test("unspeakable tokens are caught: UUIDs, URLs, paths, hex, keys", () => {
   assert.ok(rules("Session 817e3f0e-6fde-4202-8ee9-195a9ea99120 is done.").includes("unspeakable"));
   assert.ok(rules("Visit https://example.com for more.").includes("unspeakable"));
   assert.ok(rules("Open C:\\Users\\you\\project now.").includes("unspeakable"));
   assert.ok(rules("The commit is deadbeefdeadbeef42.").includes("unspeakable"));
+  assert.ok(rules("They renamed utils/helpers.js this morning.").includes("unspeakable"));
+  assert.ok(rules("It stays under the limit of key wk_live_8f3a91d2.").includes("unspeakable"));
+  assert.ok(!rules("They renamed the helpers file this morning.").includes("unspeakable"));
 });
 
 test("sentences longer than karaoke pace are caught", () => {

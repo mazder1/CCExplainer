@@ -52,6 +52,8 @@ export function lintExplanation(text, { persona = null } = {}) {
     violations.push({ rule: "unspeakable", detail: "UUID" });
   if (/https?:\/\/|www\./i.test(trimmed)) violations.push({ rule: "unspeakable", detail: "URL" });
   if (/[A-Za-z]:\\|\\\\|\w+\\\w+/.test(trimmed)) violations.push({ rule: "unspeakable", detail: "file path" });
+  if (/\b[\w.-]+\/[\w.-]+\.\w{1,5}\b/.test(trimmed)) violations.push({ rule: "unspeakable", detail: "raw slash path" });
+  if (/\b\w{2,6}_(live|test)_\w{6,}\b/.test(trimmed)) violations.push({ rule: "unspeakable", detail: "secret-looking key" });
   if (/[0-9a-f]{16,}/i.test(trimmed)) violations.push({ rule: "unspeakable", detail: "long hex string" });
 
   // --- sentence length: karaoke pace -------------------------------------

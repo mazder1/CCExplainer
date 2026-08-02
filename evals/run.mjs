@@ -12,8 +12,7 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPersona, buildExplainerMessages } from "../scripts/lib/explainer.mjs";
-import { lintExplanation } from "../scripts/lib/lint.mjs";
+import { generateExplanation } from "../scripts/lib/explainer.mjs";
 import { chat } from "../scripts/lib/llm.mjs";
 
 try {
@@ -74,18 +73,17 @@ for (const fixture of fixtures) {
   process.stdout.write(`• ${fixture.name} … `);
   const row = { name: fixture.name, trap: fixture.trap };
   try {
-    // 1. Generate — through the SAME code path production uses.
-    const persona = loadPersona(fixture.persona);
-    const messages = buildExplainerMessages({
-      persona,
+    // 1+2. Generate and lint — through the SAME code path production uses,
+    // including its one-shot lint-retry.
+    const generated = await generateExplanation({
+      personaName: fixture.persona,
       notes: fixture.notes,
       lastMessageText: fixture.lastMessage,
     });
-    const { text: explanation } = await chat(messages);
+    const explanation = generated.text;
     row.explanation = explanation;
-
-    // 2. Lint — free mechanical checks.
-    row.lint = lintExplanation(explanation, { persona: fixture.persona });
+    row.retried = generated.retried;
+    row.lint = generated.lint;
 
     // 3. Judge — rules on the trap and dimensions, with evidence.
     const judgeInput = [
