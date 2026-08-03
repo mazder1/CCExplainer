@@ -1,13 +1,13 @@
 {
-  "savedAt": "2026-08-02T19:24:22Z",
-  "note": "After the role-confusion fix (narrator rule + lint guard + bait fixture); 12 fixtures now. Previous 11-fixture baseline: trap 8, faithfulness 9, scope 11, calibration 11, coherence 11, lint-clean 11.",
-  "fixtures": 12,
+  "savedAt": "2026-08-03T07:16:36Z",
+  "note": "After proportional length budgets; 13 fixtures (one-liner added). Faithfulness reached 13/13 for the first time. Known trap targets: one-liner padding (educator defines basics on trivial messages), code-heavy regex speech, mixed-trap filename pedantry, duck over-mirroring (flaky). Previous 12-fixture baseline: trap 10, faithfulness 11, scope 12, calibration 12, coherence 12, lint 12.",
+  "fixtures": 13,
   "scores": {
-    "trap": { "pass": 10, "total": 12 },
-    "faithfulness": { "pass": 11, "total": 12 },
-    "scope": { "pass": 12, "total": 12 },
-    "calibration": { "pass": 12, "total": 12 },
-    "coherence": { "pass": 12, "total": 12 },
-    "lint-clean": { "pass": 12, "total": 12 }
+    "trap": { "pass": 9, "total": 13 },
+    "faithfulness": { "pass": 13, "total": 13 },
+    "scope": { "pass": 13, "total": 13 },
+    "calibration": { "pass": 13, "total": 13 },
+    "coherence": { "pass": 13, "total": 13 },
+    "lint-clean": { "pass": 13, "total": 13 }
   }
 }
