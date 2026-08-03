@@ -98,7 +98,7 @@ Zero test dependencies — Node's built-in runner, no API keys, no network (prov
 
 Tests prove the plumbing; [`evals/`](evals/) judges the words. Twelve hand-written trap fixtures each tempt one forbidden failure — re-explaining a solved problem, revealing the listener notes, speaking a raw file path, offering to act instead of narrating. `npm run eval` generates a real explanation per fixture **through the production code path**, lints it mechanically for free, then has a judge model rule on each trap with quoted evidence — reported as deltas against the committed [`baseline.json`](evals/baseline.json), so every prompt change is answered with *improved / unchanged / REGRESSION* instead of vibes. The harness has already paid for itself twice: it caught a latency optimization silently degrading rule-following, and a sentence-level embedding experiment surfaced a failure mode (the narrator offering to write code) that no other layer was watching for. Costs a few cents per run; judge provider overridable via `EVAL_JUDGE_*`.
 
-Current baseline: scope, calibration, coherence and lint at **12/12**; trap avoidance 10/12; faithfulness 11/12.
+Current baseline: scope, calibration, coherence and lint at ceiling; trap avoidance and faithfulness close behind — exact numbers in [`baseline.json`](evals/baseline.json). Design decisions are probe-driven where possible: explanation length scales with message length per the measured before/after curves in [`evals/length-budgets.md`](evals/length-budgets.md).
 
 ## Roadmap
 
