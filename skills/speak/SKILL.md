@@ -14,7 +14,7 @@ number, e.g. "-2", meaning: explain the assistant message that many turns
 BEFORE the latest one (add --offset <n> only when a number was given):
 
 ```
-node "${CLAUDE_SKILL_DIR}/../../scripts/explain.mjs" --live --persona <persona> [--offset <n>] | node "${CLAUDE_SKILL_DIR}/../../scripts/speak.mjs" -
+node "${CLAUDE_PLUGIN_ROOT}/scripts/explain.mjs" --live --persona <persona> [--offset <n>] | node "${CLAUDE_PLUGIN_ROOT}/scripts/speak.mjs" -
 ```
 
 Rules:
