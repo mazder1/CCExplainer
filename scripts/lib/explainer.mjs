@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chat } from "./llm.mjs";
-import { lintExplanation } from "./lint.mjs";
+import { lintExplanation, lengthBudget } from "./lint.mjs";
 
 export const PERSONA_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "personas");
 
@@ -58,9 +58,16 @@ export function loadPersona(name, dir = PERSONA_DIR) {
 
 // The single source of truth for prompt assembly. Pure function: inputs in,
 // messages out — no file reads, no network, fully unit-testable.
-export function buildExplainerMessages({ persona, notes = null, lastMessageText }) {
+export function buildExplainerMessages({ persona, notes = null, lastMessageText, budget = null }) {
+  let system = TASK_RULES + "\n\nDelivery style:\n" + persona;
+  if (budget) {
+    system +=
+      `\n\nLENGTH for THIS explanation: between ${budget.min} and ${budget.max} words` +
+      (budget.messageWords ? ` (the message being explained is ${budget.messageWords} words long)` : "") +
+      `. Never pad to fill the budget — stop when the content is covered.`;
+  }
   return [
-    { role: "system", content: TASK_RULES + "\n\nDelivery style:\n" + persona },
+    { role: "system", content: system },
     {
       role: "user",
       content:
@@ -77,9 +84,16 @@ export function buildExplainerMessages({ persona, notes = null, lastMessageText 
 // what production ships, retry included.
 export async function generateExplanation({ personaName, notes = null, lastMessageText, model, effort } = {}) {
   const persona = loadPersona(personaName);
-  const messages = buildExplainerMessages({ persona, notes, lastMessageText });
+  const messageWords = lastMessageText.trim().split(/\s+/).filter(Boolean).length;
+  const b = lengthBudget(personaName, messageWords);
+  const messages = buildExplainerMessages({
+    persona,
+    notes,
+    lastMessageText,
+    budget: b ? { ...b, messageWords } : null,
+  });
   let result = await chat(messages, { model, effort });
-  let lint = lintExplanation(result.text, { persona: personaName });
+  let lint = lintExplanation(result.text, { persona: personaName, messageWords });
   let retried = false;
   if (!lint.ok) {
     retried = true;
@@ -95,7 +109,7 @@ export async function generateExplanation({ personaName, notes = null, lastMessa
       ],
       { model, effort },
     );
-    lint = lintExplanation(result.text, { persona: personaName });
+    lint = lintExplanation(result.text, { persona: personaName, messageWords });
   }
   return { text: result.text, usage: result.usage, lint, retried };
 }

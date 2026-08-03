@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lintExplanation } from "../scripts/lib/lint.mjs";
+import { lintExplanation, lengthBudget } from "../scripts/lib/lint.mjs";
 
 // A clean, speakable, educator-length text: short sentences, ~150 words.
 const CLEAN = Array(22).fill("This is a plain spoken sentence about the code.").join(" ");
@@ -54,6 +54,21 @@ test("sentences longer than karaoke pace are caught", () => {
   const runOn =
     "This sentence just keeps going and going with more and more words piled on top of each other until nobody could possibly follow the moving highlight anymore at all.";
   assert.ok(rules(runOn).includes("sentence-too-long"));
+});
+
+test("lengthBudget scales with message length per persona", () => {
+  assert.deepEqual(lengthBudget("educator", 12), { min: 10, max: 40 });
+  assert.deepEqual(lengthBudget("educator", 500), { min: 100, max: 220 });
+  assert.ok(lengthBudget("senior-engineer", 300).max < lengthBudget("educator", 300).max);
+  assert.equal(lengthBudget("nonexistent", 50), null);
+});
+
+test("lint budget becomes proportional when messageWords is supplied", () => {
+  // ~198 words explaining a 12-word message: fine under the legacy fixed
+  // budget, a violation under the proportional one (10-40 for a one-liner).
+  assert.ok(!rules(CLEAN, { persona: "educator" }).includes("too-long"));
+  assert.ok(rules(CLEAN, { persona: "educator", messageWords: 12 }).includes("too-long"));
+  assert.ok(!rules("Fixed the typo and the tests are green now.", { persona: "educator", messageWords: 12 }).includes("too-short"));
 });
 
 test("persona word budgets: too short and too long are caught, tolerance applies", () => {

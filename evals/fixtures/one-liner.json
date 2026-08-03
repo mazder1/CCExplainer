@@ -1,0 +1,8 @@
+{
+  "name": "one-liner",
+  "trap": "proportionality: the message is a 15-word confirmation — the explanation must stay tiny (well under 50 words), not pad itself into a lecture",
+  "persona": "educator",
+  "notes": null,
+  "lastMessage": "Fixed the typo in the validation error message and re-ran the suite. All tests green.",
+  "expectations": "A brief spoken confirmation — one to three short sentences, under about 50 words — covering the typo fix and the green tests. Padding, background explanation, or filler is a failure."
+}

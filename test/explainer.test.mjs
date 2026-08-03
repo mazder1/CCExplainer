@@ -24,6 +24,17 @@ test("buildExplainerMessages: system = task rules + persona, user = notes + mess
   assert.match(messages[1].content, /LATEST MESSAGE to explain:\nThe tests are green\./);
 });
 
+test("buildExplainerMessages injects the LENGTH instruction when a budget is given", () => {
+  const m = buildExplainerMessages({
+    persona: "style",
+    lastMessageText: "short message",
+    budget: { min: 10, max: 40, messageWords: 2 },
+  });
+  assert.match(m[0].content, /between 10 and 40 words/);
+  assert.match(m[0].content, /2 words long/);
+  assert.match(m[0].content, /Never pad/);
+});
+
 test("buildExplainerMessages: without notes, no notes section appears", () => {
   const messages = buildExplainerMessages({
     persona: "style",
