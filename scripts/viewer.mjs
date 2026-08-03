@@ -56,6 +56,7 @@ let audioPath = null;
 let startedAt = 0; // wall-clock ms of the last play/resume/seek
 let clockOffset = 0; // seconds of speech already "on the clock" at startedAt
 let paused = false;
+let waitingForStart = false; // true between spawning the player and its START signal
 let pollCountdown = 0;
 let voiceSpeed = 1.0; // synthesis speed for the NEXT narration (0.7 .. 1.2)
 let volume = 1.0; // 0..1, live, survives across jobs
@@ -165,6 +166,10 @@ async function narrate() {
 }
 
 function elapsed() {
+  // While the player is still booting, the speech has not begun — the clock
+  // holds at zero. (Letting it run provisionally made the highlight race
+  // ahead through the first words and snap back when audio actually started.)
+  if (waitingForStart) return 0;
   return paused ? clockOffset : clockOffset + (Date.now() - startedAt) / 1000;
 }
 
@@ -246,7 +251,8 @@ function startJob(nextJob) {
   mode = "playing";
   paused = false;
   clockOffset = 0;
-  startedAt = Date.now(); // provisional; corrected by START
+  startedAt = Date.now(); // doubles as the boot-timeout reference while waiting
+  waitingForStart = process.platform === "win32"; // cleared by the START signal
   audioPath = join(tmpdir(), `ccexplainer-viewer-${Date.now()}.mp3`);
   writeFileSync(audioPath, Buffer.from(job.audioBase64, "base64"));
 
@@ -268,7 +274,10 @@ function startJob(nextJob) {
     ].join("; ");
     player = execFile("powershell", ["-NoProfile", "-Command", psScript], { windowsHide: true });
     player.stdout.on("data", (d) => {
-      if (String(d).includes("START")) startedAt = Date.now();
+      if (String(d).includes("START")) {
+        startedAt = Date.now();
+        waitingForStart = false;
+      }
     });
   } else {
     player = execFile(process.platform === "darwin" ? "afplay" : "mpg123", [audioPath]);
@@ -395,6 +404,12 @@ const heartbeat = setInterval(touchHeartbeat, 2000);
 
 const loop = setInterval(() => {
   if (mode === "playing") {
+    // Safety: if the START signal never arrives (player died, exotic setup),
+    // release the clock after 5s rather than freezing on word one forever.
+    if (waitingForStart && Date.now() - startedAt > 5000) {
+      waitingForStart = false;
+      startedAt = Date.now();
+    }
     renderPlaying();
     if (!paused && elapsed() > job.duration + 0.5) finishJob();
   } else {
