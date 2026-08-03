@@ -26,11 +26,9 @@ import { viewerAlive, writeJob } from "./lib/mailbox.mjs";
 // itself never appears in this code, only its NAME.
 // ---------------------------------------------------------------------------
 
-try {
-  process.loadEnvFile();
-} catch {
-  // No .env file — fine if the variable is set some other way.
-}
+import { loadEnv } from "./lib/env.mjs";
+
+loadEnv();
 
 const apiKey = process.env.ELEVENLABS_API_KEY;
 if (!apiKey) {

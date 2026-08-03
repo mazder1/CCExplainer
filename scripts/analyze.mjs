@@ -106,9 +106,8 @@ export function refreshNotesInBackground(transcriptPath) {
 
 // When run directly from the terminal (not imported), behave as a command.
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/").split("/").pop())) {
-  try {
-    process.loadEnvFile();
-  } catch {}
+  const { loadEnv } = await import("./lib/env.mjs");
+  loadEnv();
   const force = process.argv.includes("--refresh");
   const transcriptPath = process.argv.find((a) => a.endsWith(".jsonl")) ??
     latestTranscript(projectTranscriptDir(process.cwd()));

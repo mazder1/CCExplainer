@@ -18,10 +18,9 @@ import {
 import { getListenerNotes, refreshNotesInBackground } from "./analyze.mjs";
 import { llmConfig } from "./lib/llm.mjs";
 import { generateExplanation } from "./lib/explainer.mjs";
+import { loadEnv } from "./lib/env.mjs";
 
-try {
-  process.loadEnvFile();
-} catch {}
+loadEnv();
 
 const args = process.argv.slice(2);
 function flag(name, fallback) {

@@ -64,11 +64,22 @@ cd CCExplainer
 cp .env.example .env     # put your keys in .env
 ```
 
-**As a plugin:**
+**As a plugin** — in this repo or any other project:
 
 ```bash
-claude --plugin-dir .
+claude --plugin-dir /path/to/CCExplainer     # works from any directory
 ```
+
+or install it permanently:
+
+```
+/plugin marketplace add mazder1/CCExplainer
+/plugin install ccexplainer@ccexplainer
+```
+
+Keys are read from the current project's `.env` if present, else from the
+plugin's own `.env` — configure once, use everywhere. Transcripts, listener
+notes and the viewer all resolve per-project automatically.
 
 ```
 /ccexplainer:speak                     # educator explains the last message

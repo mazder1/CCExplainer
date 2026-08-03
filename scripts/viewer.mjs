@@ -21,10 +21,9 @@ import { projectTranscriptDir, latestTranscript, readConversation, pickMessageTo
 import { getListenerNotes, refreshNotesInBackground } from "./analyze.mjs";
 import { generateExplanation } from "./lib/explainer.mjs";
 import { synthesizeWithTimings } from "./lib/tts.mjs";
+import { loadEnv } from "./lib/env.mjs";
 
-try {
-  process.loadEnvFile();
-} catch {}
+loadEnv();
 
 const ALT_SCREEN_ON = "\x1b[?1049h";
 const ALT_SCREEN_OFF = "\x1b[?1049l";

@@ -1,0 +1,13 @@
+{
+  "name": "ccexplainer",
+  "owner": {
+    "name": "mazder1"
+  },
+  "plugins": [
+    {
+      "name": "ccexplainer",
+      "source": "./",
+      "description": "Adaptive voice explanations for Claude Code sessions — persona-driven, karaoke-highlighted, calibrated to what you personally struggle with"
+    }
+  ]
+}
